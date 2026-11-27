@@ -1,0 +1,757 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "id": "LOAD-PE",
+      "category": "formats",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Windows PE load and map",
+      "reference_behavior": "Open a PE image and select its mapped entry.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "object"
+      ],
+      "implementation_files": [
+        "crates/engine/src/image.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "VERIFIED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java"
+      ],
+      "test_results": "Windows x64 fixture loaded with the expected image base, entry and file mapping.",
+      "visual_validation_status": "VERIFIED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "PE32 and additional loader behaviors still need fixtures."
+      ]
+    },
+    {
+      "id": "LOAD-ELF",
+      "category": "formats",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "ELF metadata",
+      "reference_behavior": "Load mapped ELF executables.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "object"
+      ],
+      "implementation_files": [
+        "crates/engine/src/image.rs"
+      ],
+      "implementation_status": "IMPLEMENTED_UNVERIFIED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Linked ELF verification across compiler and stripping variants remains open."
+      ]
+    },
+    {
+      "id": "LOAD-MACH",
+      "category": "formats",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Mach-O metadata",
+      "reference_behavior": "Load Mach-O executable images.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "object"
+      ],
+      "implementation_files": [
+        "crates/engine/src/image.rs"
+      ],
+      "implementation_status": "IMPLEMENTED_UNVERIFIED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Thin Mach-O only. Universal binaries and platform validation remain open."
+      ]
+    },
+    {
+      "id": "LOAD-COFF",
+      "category": "formats",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "COFF metadata",
+      "reference_behavior": "Inspect executable or object views.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "object"
+      ],
+      "implementation_files": [
+        "crates/engine/src/image.rs"
+      ],
+      "implementation_status": "IMPLEMENTED_UNVERIFIED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "COFF objects expose metadata and bytes without linked address mapping."
+      ]
+    },
+    {
+      "id": "LOAD-RAW",
+      "category": "formats",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Raw x86 mapping",
+      "reference_behavior": "Supply an architecture and load address for raw bytes.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/image.rs",
+        "apps/desktop/src/app.rs"
+      ],
+      "implementation_status": "VERIFIED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": "Raw mapping, range limits and address overflow exercised.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Raw mapping is implemented for x86 and x86-64."
+      ]
+    },
+    {
+      "id": "ISA",
+      "category": "architectures",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Instruction decoding",
+      "reference_behavior": "Decode platform-specific instructions across multiple ISAs.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "iced-x86"
+      ],
+      "implementation_files": [
+        "crates/engine/src/analysis.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java"
+      ],
+      "test_results": "x86-64 fixture instruction addresses and direct flow compared with Ghidra.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [
+        "Implemented decoding covers x86 and x86-64."
+      ],
+      "unresolved_limitations": [
+        "Other architectures show recognized metadata when available."
+      ]
+    },
+    {
+      "id": "DISCOVERY",
+      "category": "static analysis",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Function discovery",
+      "reference_behavior": "Identify entry, named and inferred code functions.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/analysis.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Indirect targets, stripped discovery beyond direct calls, unwind tables and jump tables need support."
+      ]
+    },
+    {
+      "id": "UI-LINEAR",
+      "category": "analysis views",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Linear decode",
+      "reference_behavior": "Present instructions, data and gaps in address order.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/analysis.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [
+        "Hexaris provides a bounded sequential instruction listing."
+      ],
+      "unresolved_limitations": [
+        "Mixed data, code and typed spans remain open."
+      ]
+    },
+    {
+      "id": "UI-GRAPH",
+      "category": "analysis views",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Control-flow graph",
+      "reference_behavior": "Display basic blocks and interactive directed edges.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/analysis.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "The rendered graph is capped at 200 blocks and has fixed layout; no call or data-flow graphs."
+      ]
+    },
+    {
+      "id": "UI-XREF",
+      "category": "cross-references",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Cross-reference navigation",
+      "reference_behavior": "Show references to and from selected code and data.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/analysis.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Direct call, branch and RIP-relative operand references only."
+      ]
+    },
+    {
+      "id": "SYMBOLS",
+      "category": "symbols",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Symbols, import and export names",
+      "reference_behavior": "Browse and navigate function names, symbols and imported/exported names.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "object"
+      ],
+      "implementation_files": [
+        "crates/engine/src/image.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Format-level named imports and exports do not model delay imports, all ordinals, or symbol editing beyond name overrides."
+      ]
+    },
+    {
+      "id": "IR-REG",
+      "category": "instruction semantics",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "32-bit register lifting",
+      "reference_behavior": "Represent full instruction semantics using intermediate forms.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "iced-x86"
+      ],
+      "implementation_files": [
+        "crates/engine/src/ir.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Flags, aliases, memory, stacks, and most instructions remain opaque."
+      ]
+    },
+    {
+      "id": "SSA",
+      "category": "program analysis",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Register SSA and join inputs",
+      "reference_behavior": "Represent register and memory versions with SSA and data flow.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/ir.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": "SSA merge and loop backedge regression cases passed.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Only projected register state over observed flow is implemented."
+      ]
+    },
+    {
+      "id": "DECOMP",
+      "category": "decompilation",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Structured Windows x64 leaf pseudocode",
+      "reference_behavior": "Recover high-level source-like control flow, expressions, types and calls.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/decompile.rs",
+        "apps/cli/src/main.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "tests/fixtures/score.c",
+        "tests/fixtures/HexarisProbe.java",
+        "crates/engine/src/decompile.rs"
+      ],
+      "test_results": "Recompiled C-like output matched the source function for 250,008 inputs.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Small acyclic Windows x64 leaf functions with supported 32-bit instructions only."
+      ]
+    },
+    {
+      "id": "HEX",
+      "category": "analysis views",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "File-offset hex view",
+      "reference_behavior": "Inspect and edit mapped or raw bytes.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "apps/desktop/src/app/views.rs",
+        "apps/cli/src/main.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Read-only, file-offset view."
+      ]
+    },
+    {
+      "id": "SEARCH",
+      "category": "analysis utilities",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Byte patterns and ASCII strings",
+      "reference_behavior": "Search binary bytes, strings, disassembly and other analysis data.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/search.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Byte wildcards and printable ASCII only."
+      ]
+    },
+    {
+      "id": "PROJECT",
+      "category": "persistence",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Portable projects and annotations",
+      "reference_behavior": "Save binary work and restore persistent analysis state.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/project.rs",
+        "apps/desktop/src/app.rs",
+        "apps/cli/src/main.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs"
+      ],
+      "test_results": "Project replacement, no-clobber creation, annotation removal and corruption handling passed.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Recomputes analysis on reopen. Multi-project workspaces are open."
+      ]
+    },
+    {
+      "id": "CLI",
+      "category": "headless",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Headless static analysis",
+      "reference_behavior": "Run analysis and automation through headless interfaces.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "clap"
+      ],
+      "implementation_files": [
+        "apps/cli/src/main.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "scripts/verify-windows-fixture.ps1"
+      ],
+      "test_results": "PE identification, CFG, decompilation, annotations, disassembly and patch checked in release build.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Current commands cover implemented local analysis and project operations. Plugin APIs and bulk scripting are open."
+      ]
+    },
+    {
+      "id": "DESKTOP",
+      "category": "desktop",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Native analysis workspace",
+      "reference_behavior": "Interact with project tabs, views, docked and detachable panes.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [
+        "eframe",
+        "rfd"
+      ],
+      "implementation_files": [
+        "apps/desktop/src/app.rs",
+        "apps/desktop/src/app/views.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "VERIFIED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "One active file and fixed resizable side panels."
+      ]
+    },
+    {
+      "id": "TYPES",
+      "category": "types",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Type recovery and editing",
+      "reference_behavior": "Infer and edit structured types and signatures.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [],
+      "implementation_status": "MISSING",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "A type graph, field layout and propagation are open."
+      ]
+    },
+    {
+      "id": "PATCH",
+      "category": "binary editing",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Byte edits, assembly and export",
+      "reference_behavior": "Modify supported binaries and reanalyze the affected regions.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/patch.rs",
+        "apps/cli/src/main.rs",
+        "apps/desktop/src/app.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/workflows.rs",
+        "scripts/verify-windows-fixture.ps1"
+      ],
+      "test_results": "Verified exact-byte matching, range validation, no-clobber export and unchanged source on Windows.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Fixed-length export to a new file. Assembly, undo, and in-place reanalysis remain open."
+      ]
+    },
+    {
+      "id": "DEBUG",
+      "category": "debugging",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Native process debugging",
+      "reference_behavior": "Run, observe and step an authorized local program.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [],
+      "implementation_status": "MISSING",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "No debugger backend or debugger UI."
+      ]
+    },
+    {
+      "id": "PLUGINS",
+      "category": "extensibility",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Plugin lifecycle and SDK",
+      "reference_behavior": "Install third-party extensions and extend the engine and UI.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [],
+      "implementation_status": "MISSING",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "A reusable Rust library is available. Plugin hosts and compatibility are open."
+      ]
+    },
+    {
+      "id": "SETTINGS",
+      "category": "configuration",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Theme, settings and workspace persistence",
+      "reference_behavior": "Configure analysis, key bindings, themes and layout.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [],
+      "implementation_status": "MISSING",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Current desktop colors are fixed and navigation state is ephemeral."
+      ]
+    },
+    {
+      "id": "EDITIONS",
+      "category": "reference coverage",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Edition-specific workflows",
+      "reference_behavior": "Behavior available in other editions or licensed configurations.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [],
+      "implementation_status": "REFERENCE_INACCESSIBLE",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Edition-specific behavior needs separately authorized reference access."
+      ]
+    },
+    {
+      "id": "PERF",
+      "category": "performance",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Interactive performance and benchmarks",
+      "reference_behavior": "Keep analysis and navigation responsive on large images.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "apps/desktop/src/app.rs",
+        "crates/engine/src/analysis.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "UNINVESTIGATED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Background file loading and search, UI virtualization, and analysis budgets are implemented. Large-corpus benchmarks remain open."
+      ]
+    },
+    {
+      "id": "PLATFORMS",
+      "category": "platforms",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Windows, Linux and macOS",
+      "reference_behavior": "Use a native application on three desktop operating systems.",
+      "evidence_source": [
+        "docs/REFERENCE_INVENTORY.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        ".github/workflows/ci.yml",
+        "scripts/package-windows.ps1"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [],
+      "test_results": null,
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Windows x64 is validated. Linux and macOS runtime verification and packaging remain open."
+      ]
+    }
+  ]
+}

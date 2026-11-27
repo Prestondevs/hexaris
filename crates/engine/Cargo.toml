@@ -1,0 +1,20 @@
+[package]
+name = "hexaris-engine"
+description = "Rust binary inspection and static analysis engine for Hexaris"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+iced-x86 = { version = "1.21.0", default-features = false, features = ["std", "decoder", "intel", "instr_info"] }
+object = { version = "0.37.3", default-features = false, features = ["read", "std"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2"
+
+[lints]
+workspace = true

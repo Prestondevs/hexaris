@@ -1,0 +1,16 @@
+[[asset]]
+file = "branding/hexaris.svg"
+source = "Hexaris contributors"
+license = "MIT"
+usage = "Application mark, window icon, and welcome screen"
+
+[[collection]]
+source = "https://github.com/tabler/tabler-icons"
+version = "v3.34.1"
+license = "MIT"
+copyright = "Copyright (c) 2020-2024 Paweł Kuna"
+license_file = "LICENSES/Tabler-MIT.txt"
+source_paths = ["icons/outline/folder-open.svg", "icons/outline/device-floppy.svg", "icons/outline/search.svg", "icons/outline/adjustments.svg"]
+files = ["icons/tabler/folder-open.svg", "icons/tabler/device-floppy.svg", "icons/tabler/search.svg", "icons/tabler/adjustments.svg"]
+modifications = "Stored as published. Desktop resolves currentColor at render time."
+usage = "Open, Save project, Find bytes, Inspector"
