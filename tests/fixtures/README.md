@@ -26,3 +26,5 @@ analyzeHeadless PATH_TO_PROJECT_PARENT HexarisXmlFixture -import .dev\fixtures\s
 ```
 
 Use a local scratch path for XML and its accompanying `.bytes` file. The import check reads only the XML.
+
+`workbench.c` is the screenshot fixture. Build it with the same compiler options as `score.c`, using `workbench.c`, `workbench.obj`, `workbench.map`, and `workbench.exe` for the input, object, map, and image names. Open `score_window` to see its branching logic and read its callers and callees.
