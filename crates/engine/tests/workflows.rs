@@ -4,9 +4,9 @@ use std::{
 };
 
 use hexaris_engine::{
-    Architecture, BytePatch, BytePattern, EdgeKind, Image, InstructionToken, LoadMode, Project,
-    ReferenceKind, analyze, analyze_function, decompile, disassemble, lift, scan_strings,
-    write_patched_copy,
+    Architecture, BranchEdit, BytePatch, BytePattern, EdgeKind, Image, InstructionToken, LoadMode,
+    NumberBase, Project, ReferenceKind, analyze, analyze_function, decompile, disassemble, lift,
+    scan_strings, string_at, write_patched_copy,
 };
 
 fn raw(bytes: &[u8], base: u64) -> Image {
@@ -18,6 +18,93 @@ fn raw(bytes: &[u8], base: u64) -> Image {
         },
     )
     .unwrap()
+}
+
+#[test]
+fn string_references_are_rendered_in_pseudocode_and_number_bases_are_distinct() {
+    let mut bytes = vec![0x48, 0x8d, 0x05, 0x01, 0, 0, 0, 0xc3];
+    bytes.extend_from_slice(b"Hello fixture\0N\0a\0m\0e\0\0\0");
+    let image = raw(&bytes, 0x1000);
+    let function = analyze_function(&image, 0x1000).unwrap();
+    assert_eq!(string_at(&image, 0x1008).as_deref(), Some("Hello fixture"));
+    assert_eq!(string_at(&image, 0x1016).as_deref(), Some("Name"));
+    assert!(string_at(&image, 0x1017).is_none());
+    let output = decompile(&image, &function).control_flow.unwrap();
+    assert!(
+        output
+            .lines
+            .iter()
+            .any(|line| line.address == Some(0x1000) && line.text.contains("Hello fixture"))
+    );
+    let instruction = &function.instructions[0];
+    for (base, expectation) in [
+        (NumberBase::Decimal, "4104"),
+        (NumberBase::Binary, "0b"),
+        (NumberBase::Octal, "0o"),
+    ] {
+        let mut text = String::new();
+        instruction.visit_tokens_in(base, |token, _| text.push_str(token));
+        assert!(text.contains(expectation), "{text}");
+    }
+}
+
+#[test]
+fn patch_actions_keep_the_original_branch_destination_or_next_instruction() {
+    for (bytes, target) in [
+        (vec![0x75, 0x01, 0x90, 0xc3], 0x1003),
+        (vec![0x0f, 0x85, 0x01, 0, 0, 0, 0x90, 0xc3], 0x1007),
+    ] {
+        let image = raw(&bytes, 0x1000);
+        let listing = disassemble(&image, 0x1000, 1).unwrap();
+        let instruction = &listing.instructions[0];
+        let directory = tempfile::tempdir().unwrap();
+        for edit in [BranchEdit::AlwaysTaken, BranchEdit::AlwaysFallthrough] {
+            let patch = BytePatch::edit_branch(instruction, edit).unwrap();
+            assert_eq!(patch.replacement().len(), instruction.bytes.len());
+            let output = directory.path().join(format!("{edit:?}.bin"));
+            patch.write_copy(&image, &output).unwrap();
+            let modified = raw(&fs::read(output).unwrap(), 0x1000);
+            let analyzed = analyze_function(&modified, 0x1000).unwrap();
+            let has_jump = analyzed
+                .blocks
+                .iter()
+                .flat_map(|block| &block.successors)
+                .any(|edge| edge.kind == EdgeKind::Jump && edge.target == target);
+            assert_eq!(has_jump, edit == BranchEdit::AlwaysTaken);
+            let has_fallthrough = analyzed
+                .instructions
+                .iter()
+                .any(|item| item.address == instruction.address + instruction.bytes.len() as u64);
+            assert_eq!(has_fallthrough, edit == BranchEdit::AlwaysFallthrough);
+        }
+        assert_eq!(image.bytes(), bytes);
+    }
+}
+
+#[test]
+fn recovered_argument_names_round_trip_as_version_three() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("aliases.hxproj");
+    let mut project = Project::new("fixture".to_owned(), raw(&[0xc3], 0x1000));
+    project
+        .set_argument_name(0x1000, 1, "threshold".to_owned())
+        .unwrap();
+    assert!(
+        project
+            .set_argument_name(0x1000, 2, "threshold".to_owned())
+            .is_err()
+    );
+    assert!(
+        project
+            .set_argument_name(0x1000, 2, "return".to_owned())
+            .is_err()
+    );
+    project.save_new(&path).unwrap();
+    assert_eq!(fs::read(&path).unwrap()[7], 3);
+    let mut project = Project::open(&path).unwrap();
+    assert_eq!(project.argument_name(0x1000, 1), Some("threshold"));
+    project.set_argument_name(0x1000, 1, String::new()).unwrap();
+    assert_eq!(project.argument_name(0x1000, 1), None);
 }
 
 #[test]

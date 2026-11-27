@@ -3,6 +3,7 @@ use eframe::egui::{
 };
 
 const ARTWORK: &[u8] = include_bytes!("../../../assets/branding/starry-night.png");
+const ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hexaris-icon.png"));
 pub const STORAGE_KEY: &str = "hexaris.theme";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -257,16 +258,24 @@ fn raster(svg: &[u8], size: u32) -> Option<Vec<u8>> {
 }
 
 pub fn artwork_texture(ctx: &Context) -> Option<TextureHandle> {
-    let icon = eframe::icon_data::from_png_bytes(ARTWORK).ok()?;
+    png_texture(ctx, "hexaris-artwork", ARTWORK)
+}
+
+pub fn brand_texture(ctx: &Context) -> Option<TextureHandle> {
+    png_texture(ctx, "hexaris-icon", ICON)
+}
+
+fn png_texture(ctx: &Context, name: &str, bytes: &[u8]) -> Option<TextureHandle> {
+    let icon = eframe::icon_data::from_png_bytes(bytes).ok()?;
     Some(ctx.load_texture(
-        "hexaris-artwork",
+        name,
         ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba),
         TextureOptions::LINEAR,
     ))
 }
 
 pub fn window_icon() -> IconData {
-    eframe::icon_data::from_png_bytes(ARTWORK).unwrap_or_default()
+    eframe::icon_data::from_png_bytes(ICON).unwrap_or_default()
 }
 
 pub fn tabler(ctx: &Context, name: &str, svg: &str) -> Option<TextureHandle> {

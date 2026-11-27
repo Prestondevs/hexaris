@@ -47,7 +47,7 @@ pub fn decompile(image: &Image, function: &Function) -> Decompilation {
         address: function.address,
         code,
         unavailable,
-        control_flow: decompile_listing::render(function),
+        control_flow: decompile_listing::render(image, function),
     }
 }
 

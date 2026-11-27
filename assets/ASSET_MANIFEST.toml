@@ -2,7 +2,13 @@
 file = "branding/starry-night.png"
 source = "Original artwork for Hexaris"
 license = "MIT"
-usage = "Window icon, desktop header, and welcome screen"
+usage = "Welcome screen"
+
+[[asset]]
+file = "branding/hexaris-icon.svg"
+source = "Original Hexaris mark inspired by ASCII terminal glyphs"
+license = "MIT"
+usage = "Desktop header, window icon, and embedded Windows application icon"
 
 [[asset]]
 file = "../docs/images/alchemist-banner.jpg"
@@ -19,6 +25,12 @@ source = "Hexaris Windows desktop on the authored score and workbench fixtures"
 license = "MIT"
 files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png"]
 usage = "README and user guide screenshots"
+
+[[collection]]
+source = "Hexaris Windows desktop on an authored raw string fixture"
+license = "MIT"
+files = ["../docs/images/graph-strings.png", "../docs/images/pseudo-search.png"]
+usage = "User guide screenshots for graph strings and Pseudo-C search"
 
 [[collection]]
 source = "https://github.com/tabler/tabler-icons"

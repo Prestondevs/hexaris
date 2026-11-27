@@ -1,6 +1,6 @@
 # Test results
 
-On Windows x64, formatting, workspace checks, strict Clippy, all 26 test cases, and the release build passed using the locked dependency set. [Development environment](DEVELOPMENT_ENVIRONMENT.md)
+On Windows x64, formatting, workspace checks, strict Clippy, all 30 test cases, and the release build passed using the locked dependency set. [Development environment](DEVELOPMENT_ENVIRONMENT.md)
 
 Regression cases cover raw mapping and overflow, direct call discovery, reachability, overlaps, truncated decode, RIP-relative references, CFG joins, SSA backedges, expression width, wildcard bytes, ASCII boundaries, and portable project integrity. The bounded decompiler has cases for a recovered unsigned branch and rejection of loops and unknown memory.
 
@@ -13,5 +13,9 @@ In the Windows desktop, two fixtures opened as separate tabs, a repeated open fo
 The assistant workflow tests cover exact 64-bit address strings, context pagination, unavailable Pseudo-C, image identity and base checks, and accepting one annotation without applying the others. A live stdio session against the score fixture verified MCP negotiation, tool discovery, function evidence, and references. Comparing a fixture rebuilt with a changed return constant identified the changed function and its first differing instruction. The [user guide](USER_GUIDE.md) includes Windows captures of the context, review, and comparison windows.
 
 The desktop graph layout includes all 241 blocks in the large fixture. Engine tests verify short and near branch inversion, patch queue overlap rejection, and a register-level listing that retains a call and a loop backedge. Windows captures show the syntax colors, fit view, branch patch preview, and both Pseudo-C views. [User guide](USER_GUIDE.md)
+
+The workbench update adds tests for forced branch outcomes, mapped ASCII and ASCII-range UTF-16LE references, operand number bases, address-range dragging, and version 3 argument name persistence. The native desktop smoke test used an authored string fixture to check graph previews, sticky views, in-view search, and address highlights in Pseudo-C. Windows Explorer extracted the new icon from the release executable.
+
+Read-only static analysis of the local Bob’s Gambling PE discovered 71 functions, 252 basic blocks, and 134 direct branch references. Hexaris emitted address-linked Pseudo-C for all 71 discovered functions and structured output for four. The file contained printable strings and the analysis resolved zero direct text references. The sample hash stayed the same.
 
 Linux and macOS native runtime, accessibility, formal differential corpus coverage, fuzzing, and benchmark gates remain open.

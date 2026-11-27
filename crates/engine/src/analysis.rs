@@ -48,9 +48,35 @@ pub enum InstructionToken {
     Target,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum NumberBase {
+    #[default]
+    Hex,
+    Decimal,
+    Octal,
+    Binary,
+}
+
+impl NumberBase {
+    pub const ALL: [Self; 4] = [Self::Hex, Self::Decimal, Self::Octal, Self::Binary];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Hex => "Hex",
+            Self::Decimal => "Decimal",
+            Self::Octal => "Octal",
+            Self::Binary => "Binary",
+        }
+    }
+}
+
 impl Instruction {
     /// Visit the Intel listing in display order with the formatter's token categories.
     pub fn visit_tokens(&self, write: impl FnMut(&str, InstructionToken)) {
+        self.visit_tokens_in(NumberBase::Hex, write);
+    }
+
+    pub fn visit_tokens_in(&self, base: NumberBase, write: impl FnMut(&str, InstructionToken)) {
         let control_flow = matches!(
             self.decoded.flow_control(),
             FlowControl::ConditionalBranch
@@ -64,7 +90,19 @@ impl Instruction {
             control_flow,
             write,
         };
-        intel_formatter().format(&self.decoded, &mut output);
+        let mut formatter = intel_formatter();
+        let options = formatter.options_mut();
+        options.set_number_base(match base {
+            NumberBase::Hex => iced_x86::NumberBase::Hexadecimal,
+            NumberBase::Decimal => iced_x86::NumberBase::Decimal,
+            NumberBase::Octal => iced_x86::NumberBase::Octal,
+            NumberBase::Binary => iced_x86::NumberBase::Binary,
+        });
+        options.set_octal_prefix("0o");
+        options.set_binary_prefix("0b");
+        options.set_octal_suffix("");
+        options.set_binary_suffix("");
+        formatter.format(&self.decoded, &mut output);
     }
 }
 
@@ -418,10 +456,22 @@ fn decode_function(
                 kind,
             });
         }
-        if instruction.is_ip_rel_memory_operand() {
+        let memory = if instruction.is_ip_rel_memory_operand() {
+            Some(instruction.ip_rel_memory_address())
+        } else if instruction.memory_base() == iced_x86::Register::None
+            && instruction.memory_index() == iced_x86::Register::None
+            && instruction.segment_prefix() == iced_x86::Register::None
+            && (0..instruction.op_count()).any(|index| instruction.op_kind(index) == OpKind::Memory)
+        {
+            Some(instruction.memory_displacement64())
+                .filter(|&target| image.file_offset(target).is_some())
+        } else {
+            None
+        };
+        if let Some(target) = memory {
             references.insert(Reference {
                 source: address,
-                target: instruction.ip_rel_memory_address(),
+                target,
                 kind: ReferenceKind::Address,
             });
         }

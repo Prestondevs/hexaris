@@ -4,6 +4,13 @@ use crate::{Error, Image, Instruction, Result};
 
 const PATCH_LIMIT: usize = 4096;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BranchEdit {
+    Invert,
+    AlwaysTaken,
+    AlwaysFallthrough,
+}
+
 /// A fixed-length replacement at a file offset, guarded by the expected bytes.
 pub struct BytePatch {
     pub offset: usize,
@@ -54,13 +61,23 @@ impl BytePatch {
     }
 
     pub fn invert_branch(instruction: &Instruction) -> Option<Self> {
+        Self::edit_branch(instruction, BranchEdit::Invert)
+    }
+
+    pub fn edit_branch(instruction: &Instruction, edit: BranchEdit) -> Option<Self> {
         let opcode = match instruction.bytes.as_slice() {
             [0x70..=0x7f, _] if instruction.decoded.is_jcc_short_or_near() => 0,
             [0x0f, 0x80..=0x8f, _, _, _, _] if instruction.decoded.is_jcc_short_or_near() => 1,
             _ => return None,
         };
         let mut replacement = instruction.bytes.clone();
-        replacement[opcode] ^= 1;
+        match edit {
+            BranchEdit::Invert => replacement[opcode] ^= 1,
+            BranchEdit::AlwaysTaken if opcode == 0 => replacement[0] = 0xeb,
+            // Both encodings end at the same IP, so the displacement stays unchanged.
+            BranchEdit::AlwaysTaken => replacement[..2].copy_from_slice(&[0x90, 0xe9]),
+            BranchEdit::AlwaysFallthrough => replacement.fill(0x90),
+        }
         Some(Self {
             offset: instruction.file_offset,
             expected: instruction.bytes.clone(),
@@ -136,7 +153,7 @@ pub fn write_patched_copy(image: &Image, patches: &[BytePatch], output: &Path) -
     Ok(())
 }
 
-fn parse_bytes(text: &str) -> Result<Vec<u8>> {
+pub fn parse_bytes(text: &str) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     for word in text.split_ascii_whitespace() {
         if word.len() % 2 != 0 || !word.bytes().all(|byte| byte.is_ascii_hexdigit()) {

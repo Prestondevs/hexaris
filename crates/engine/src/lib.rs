@@ -16,7 +16,7 @@ mod triage;
 
 pub use analysis::{
     Analysis, Block, Edge, EdgeKind, Function, Instruction, InstructionToken, LinearListing,
-    Reference, ReferenceKind, analyze, analyze_function, disassemble,
+    NumberBase, Reference, ReferenceKind, analyze, analyze_function, disassemble,
 };
 pub use assistant::{
     AnnotationProposal, AssistantFinding, AssistantResponse, CONTEXT_LIMIT, ContextAddress,
@@ -31,10 +31,10 @@ pub use image::{
     parse_address,
 };
 pub use ir::{LiftedBlock, LiftedFunction, LiftedStatement, RegisterIncoming, RegisterInput, lift};
-pub use patch::{BytePatch, write_patched_copy};
+pub use patch::{BranchEdit, BytePatch, parse_bytes, write_patched_copy};
 pub use project::Project;
 pub use references::{CallSite, ReferenceIndex};
-pub use search::{BytePattern, StringItem, scan_strings};
+pub use search::{BytePattern, StringItem, scan_strings, string_at};
 pub use triage::{EntropySample, ImageTriage, triage};
 
 pub type Result<T> = std::result::Result<T, Error>;

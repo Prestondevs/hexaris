@@ -1,13 +1,18 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
-use hexaris_engine::{BytePatch, EdgeKind, Function};
+use hexaris_engine::{
+    Block, BytePatch, Edge, EdgeKind, Function, Instruction, NumberBase, Project, ReferenceKind,
+    string_at,
+};
 
-use super::{Ui, label, theme};
+use super::{Ui, label, selection::AddressSelection, theme};
 
-const CARD: Vec2 = vec2(290.0, 128.0);
-const STRIDE: Vec2 = vec2(342.0, 192.0);
+const CARD: Vec2 = vec2(340.0, 150.0);
+const STRIDE: Vec2 = vec2(392.0, 214.0);
 const COLUMNS: usize = 5;
+const LINE_Y: f32 = 28.0;
+const LINE_HEIGHT: f32 = 15.0;
 
 #[derive(Default)]
 pub(super) struct GraphState {
@@ -15,6 +20,13 @@ pub(super) struct GraphState {
     layout: Layout,
     zoom: f32,
     pan: Vec2,
+    strings: BTreeMap<u64, Vec<(u64, String)>>,
+    show_details: bool,
+    edge: Option<(usize, Edge)>,
+    menu_block: Option<usize>,
+    menu_address: Option<u64>,
+    pub(super) focus_selection: bool,
+    box_anchor: Option<Pos2>,
 }
 
 #[derive(Default)]
@@ -91,6 +103,9 @@ impl Layout {
 pub(super) enum GraphAction {
     Select(u64),
     Disassemble(u64),
+    Follow(u64),
+    Patch(usize),
+    Highlight(u64, u64),
     Invert(BytePatch, String),
 }
 
@@ -98,7 +113,10 @@ pub(super) fn graph(
     ui: &mut Ui,
     state: &mut GraphState,
     function: &Function,
+    project: &Project,
     selected: Option<u64>,
+    selection: &AddressSelection,
+    number_base: NumberBase,
 ) -> Option<GraphAction> {
     if function.blocks.is_empty() {
         label(ui, "No decoded blocks for this function.");
@@ -108,6 +126,21 @@ pub(super) fn graph(
     if changed {
         state.function = Some(function.address);
         state.layout = Layout::new(function);
+        state.edge = None;
+        state.menu_block = None;
+        state.menu_address = None;
+        state.strings.clear();
+        for reference in &function.references {
+            if reference.kind == ReferenceKind::Address
+                && let Some(text) = string_at(project.image(), reference.target)
+            {
+                state
+                    .strings
+                    .entry(reference.source)
+                    .or_default()
+                    .push((reference.target, text));
+            }
+        }
     }
     let palette = theme::current(ui.ctx());
     let selected_index = selected
@@ -123,7 +156,9 @@ pub(super) fn graph(
         })
         .or_else(|| state.layout.index.get(&function.address).copied());
     let mut fit = changed;
-    let mut focus = None;
+    let mut focus = std::mem::take(&mut state.focus_selection)
+        .then_some(selected_index)
+        .flatten();
     let mut change_zoom = 1.0;
     let mut result = None;
     ui.horizontal_wrapped(|ui| {
@@ -145,35 +180,43 @@ pub(super) fn graph(
             state.zoom * 100.0,
             function.blocks.len()
         ));
+        fit |= ui
+            .toggle_value(&mut state.show_details, "Block details")
+            .changed();
         if let Some(index) = selected_index {
             let block = &function.blocks[index];
             if ui.button("Open disassembly").clicked() {
                 result = Some(GraphAction::Disassemble(block.address));
             }
-            let terminal =
-                &function.instructions[block.first_instruction + block.instruction_count - 1];
-            if let Some(patch) = BytePatch::invert_branch(terminal)
+            let terminal = block_instructions(function, block)
+                .last()
+                .expect("nonempty decoded block");
+            if let Some(action) = invert_action(terminal)
                 && ui
                     .button("Invert branch…")
                     .on_hover_text(&terminal.text)
                     .clicked()
             {
-                result = Some(GraphAction::Invert(
-                    patch,
-                    format!(
-                        "Invert {} at 0x{:X}. The destination and byte length stay the same.",
-                        terminal.text, terminal.address
-                    ),
-                ));
+                result = Some(action);
             }
         }
     });
     ui.horizontal_wrapped(|ui| {
-        label(ui, "Drag to pan · Scroll to zoom · Double-click to focus");
+        label(
+            ui,
+            "Drag to pan · Shift+drag to highlight · Right-click for actions",
+        );
         ui.colored_label(palette.accent, "Taken");
         ui.colored_label(palette.text, "Fallthrough");
         ui.colored_label(palette.warn, "Jump");
     });
+    if state.show_details
+        && let Some(index) = selected_index
+    {
+        let block = &function.blocks[index];
+        let detail_action = details(ui, state, block, function, project, selected);
+        result = detail_action.or(result);
+    }
     let size = ui.available_size().max(vec2(120.0, 120.0));
     let (canvas, painter) = ui.allocate_painter(size, Sense::click_and_drag());
     let min_zoom =
@@ -184,7 +227,16 @@ pub(super) fn graph(
         state.pan = (size - state.layout.size * state.zoom) * 0.5;
         ui.ctx().request_repaint();
     }
-    if canvas.dragged() {
+    if canvas.drag_started_by(egui::PointerButton::Primary) {
+        state.box_anchor = ui.input(|input| {
+            input
+                .modifiers
+                .shift
+                .then(|| input.pointer.press_origin())
+                .flatten()
+        });
+    }
+    if canvas.dragged_by(egui::PointerButton::Primary) && state.box_anchor.is_none() {
         state.pan += canvas.drag_delta();
     }
     let pointer = canvas.hover_pos().map(|point| point - canvas.rect.min);
@@ -209,7 +261,17 @@ pub(super) fn graph(
         if let Some(index) = state.layout.positions.iter().position(|&position| {
             Rect::from_min_size(position, CARD).contains(pos2(world.x, world.y))
         }) {
-            result = Some(GraphAction::Select(function.blocks[index].address));
+            let block = &function.blocks[index];
+            let instructions = block_instructions(function, block);
+            let instruction = at_preview_row(
+                instructions,
+                world.y - state.layout.positions[index].y,
+                state.zoom,
+            );
+            state.edge = None;
+            result = Some(GraphAction::Select(
+                instruction.map_or(block.address, |item| item.address),
+            ));
             if canvas.double_clicked() {
                 focus = Some(index);
             }
@@ -225,6 +287,43 @@ pub(super) fn graph(
     let zoom = state.zoom;
     let locate = |world: Pos2| canvas.rect.min + state.pan + world.to_vec2() * zoom;
     let dimensions = CARD * zoom;
+    let box_selection = state
+        .box_anchor
+        .zip(ui.input(|input| input.pointer.interact_pos()))
+        .map(|(anchor, point)| Rect::from_two_pos(anchor, point).intersect(canvas.rect));
+    if canvas.drag_stopped_by(egui::PointerButton::Primary) {
+        state.box_anchor = None;
+        if let Some(rect) = box_selection {
+            let mut first = u64::MAX;
+            let mut last = 0;
+            for (index, block) in function.blocks.iter().enumerate() {
+                if rect.intersects(Rect::from_min_size(
+                    locate(state.layout.positions[index]),
+                    dimensions,
+                )) {
+                    let terminal = &function.instructions
+                        [block.first_instruction + block.instruction_count - 1];
+                    first = first.min(block.address);
+                    last = last.max(terminal.address);
+                }
+            }
+            if first <= last {
+                result = Some(GraphAction::Highlight(first, last));
+            }
+        }
+    }
+    let graph_pointer = canvas
+        .interact_pointer_pos()
+        .or_else(|| canvas.hover_pos())
+        .filter(|&at| canvas.rect.contains(at));
+    let on_card =
+        graph_pointer.and_then(|at| {
+            state.layout.positions.iter().position(|&position| {
+                Rect::from_min_size(locate(position), dimensions).contains(at)
+            })
+        });
+    let edge_pointer = graph_pointer.filter(|_| on_card.is_none());
+    let mut nearest_edge = None;
     for (index, block) in function.blocks.iter().enumerate() {
         let source = locate(state.layout.positions[index]);
         for edge in &block.successors {
@@ -247,6 +346,12 @@ pub(super) fn graph(
                 {
                     let shift = (port - 0.5) * 80.0 * zoom;
                     let arrow = vec2(shift, 14.0 * zoom);
+                    record_edge(
+                        edge_pointer,
+                        &[from, from + arrow],
+                        (index, *edge),
+                        &mut nearest_edge,
+                    );
                     painter.arrow(from, arrow, stroke);
                     if zoom >= 0.57 {
                         let align = if port < 0.5 {
@@ -292,18 +397,100 @@ pub(super) fn graph(
             {
                 continue;
             }
+            record_edge(edge_pointer, &points, (index, *edge), &mut nearest_edge);
+            let stroke = if state.edge == Some((index, *edge)) {
+                Stroke::new(stroke.width + 2.0, color)
+            } else {
+                stroke
+            };
             painter.add(egui::Shape::line(points.to_vec(), stroke));
             if zoom >= 0.16 {
                 painter.arrow(end, to - end, stroke);
             }
         }
     }
+    let hit = nearest_edge.map(|(_, edge)| edge);
+    if hit.is_some() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if let Some((index, edge)) = hit
+        && (canvas.clicked() || canvas.secondary_clicked())
+    {
+        state.edge = Some((index, edge));
+        let terminal = block_instructions(function, &function.blocks[index])
+            .last()
+            .expect("nonempty decoded block");
+        result = Some(GraphAction::Select(terminal.address));
+    }
+    if canvas.secondary_clicked() {
+        state.menu_block = hit.map(|(index, _)| index).or(on_card);
+        state.menu_address = on_card
+            .zip(canvas.interact_pointer_pos())
+            .and_then(|(index, at)| {
+                let top = locate(state.layout.positions[index]).y;
+                let block = &function.blocks[index];
+                at_preview_row(
+                    block_instructions(function, block),
+                    (at.y - top) / zoom,
+                    zoom,
+                )
+            })
+            .map(|instruction| instruction.address);
+        if on_card.is_some() {
+            state.edge = None;
+        }
+    }
+    canvas.context_menu(|ui| {
+        let Some(index) = state.menu_block else {
+            label(ui, "Select a block or branch.");
+            return;
+        };
+        let block = &function.blocks[index];
+        let instructions = block_instructions(function, block);
+        let instruction = state
+            .menu_address
+            .and_then(|address| {
+                instructions
+                    .binary_search_by_key(&address, |instruction| instruction.address)
+                    .ok()
+                    .map(|index| &instructions[index])
+            })
+            .unwrap_or_else(|| instructions.last().expect("nonempty decoded block"));
+        if let Some((_, edge)) = state.edge
+            && ui
+                .button(format!(
+                    "Follow {} -> 0x{:X}",
+                    edge_name(edge.kind),
+                    edge.target
+                ))
+                .clicked()
+        {
+            result = Some(follow_action(state, edge.target));
+            ui.close();
+        }
+        if let Some((patch, description)) = super::editing::branch_menu(ui, instruction) {
+            result = Some(GraphAction::Invert(patch, description));
+        }
+        if ui.button("Patch bytes here…").clicked() {
+            result = Some(GraphAction::Patch(instruction.file_offset));
+            ui.close();
+        }
+        if ui.button("Open block in disassembly").clicked() {
+            result = Some(GraphAction::Disassemble(block.address));
+            ui.close();
+        }
+    });
     for (index, block) in function.blocks.iter().enumerate() {
         let rect = Rect::from_min_size(locate(state.layout.positions[index]), dimensions);
         if !canvas.rect.intersects(rect) {
             continue;
         }
-        let highlight = selected_index == Some(index);
+        let terminal =
+            &function.instructions[block.first_instruction + block.instruction_count - 1];
+        let highlight = selected_index == Some(index)
+            || selection
+                .range
+                .is_some_and(|(first, last)| first <= terminal.address && block.address <= last);
         painter.rect(
             rect,
             4,
@@ -337,39 +524,207 @@ pub(super) fn graph(
             palette.accent,
         );
         if zoom >= 0.57 {
-            let instructions = &function.instructions
-                [block.first_instruction..block.first_instruction + block.instruction_count];
-            let (last, head) = instructions.split_last().expect("nonempty decoded block");
-            for (line, instruction) in head.iter().take(4).enumerate() {
+            let instructions = block_instructions(function, block);
+            let rows = instructions.len().min(6);
+            for row in 0..rows {
+                let at = rect.min + vec2(10.0, LINE_Y + row as f32 * LINE_HEIGHT) * zoom;
+                if let Some(instruction) = preview_row(instructions, row) {
+                    let mut job = egui::text::LayoutJob::default();
+                    instruction.visit_tokens_in(number_base, |text, kind| {
+                        job.append(
+                            text,
+                            0.0,
+                            egui::TextFormat {
+                                font_id: FontId::monospace(12.0 * zoom),
+                                color: super::views::syntax_color(palette, kind),
+                                ..Default::default()
+                            },
+                        )
+                    });
+                    card.galley(
+                        at,
+                        ui.fonts_mut(|fonts| fonts.layout_job(job)),
+                        palette.text,
+                    );
+                } else {
+                    card.text(
+                        at,
+                        Align2::LEFT_TOP,
+                        "…",
+                        FontId::monospace(12.0 * zoom),
+                        palette.muted,
+                    );
+                }
+            }
+            if let Some((_, text)) = instructions.iter().find_map(|item| {
+                state
+                    .strings
+                    .get(&item.address)
+                    .and_then(|strings| strings.first())
+            }) {
+                let text: String = text.chars().take(44).collect();
                 card.text(
-                    rect.min + vec2(10.0, 28.0 + line as f32 * 15.0) * zoom,
+                    rect.min + vec2(10.0, 126.0) * zoom,
                     Align2::LEFT_TOP,
-                    &instruction.text,
+                    format!("{text:?}"),
                     FontId::monospace(12.0 * zoom),
-                    palette.text,
+                    palette.register,
                 );
             }
-            let line = head.len().min(4);
-            if head.len() > 4 {
-                card.text(
-                    rect.min + vec2(10.0, 88.0) * zoom,
-                    Align2::LEFT_TOP,
-                    "…",
-                    FontId::monospace(12.0 * zoom),
-                    palette.muted,
-                );
-            }
-            let last_line = line + usize::from(head.len() > 4);
-            card.text(
-                rect.min + vec2(10.0, 28.0 + last_line as f32 * 15.0) * zoom,
-                Align2::LEFT_TOP,
-                &last.text,
-                FontId::monospace(12.0 * zoom),
-                palette.text,
-            );
         }
     }
+    if let Some(rect) = box_selection {
+        painter.rect(
+            rect,
+            2,
+            palette.accent.gamma_multiply(0.16),
+            Stroke::new(1.0_f32, palette.accent),
+            StrokeKind::Inside,
+        );
+    }
     result
+}
+
+fn block_instructions<'a>(function: &'a Function, block: &Block) -> &'a [Instruction] {
+    &function.instructions
+        [block.first_instruction..block.first_instruction + block.instruction_count]
+}
+
+fn preview_row(instructions: &[Instruction], row: usize) -> Option<&Instruction> {
+    if instructions.len() <= 6 || row < 4 {
+        instructions.get(row)
+    } else if row == 5 {
+        instructions.last()
+    } else {
+        None
+    }
+}
+
+fn at_preview_row(instructions: &[Instruction], offset: f32, zoom: f32) -> Option<&Instruction> {
+    if zoom < 0.57 || !(LINE_Y..LINE_Y + 6.0 * LINE_HEIGHT).contains(&offset) {
+        return None;
+    }
+    preview_row(instructions, ((offset - LINE_Y) / LINE_HEIGHT) as usize)
+}
+
+fn edge_name(kind: EdgeKind) -> &'static str {
+    match kind {
+        EdgeKind::Taken => "Taken",
+        EdgeKind::Fallthrough => "Fallthrough",
+        EdgeKind::Jump => "Jump",
+    }
+}
+
+fn record_edge(
+    pointer: Option<Pos2>,
+    points: &[Pos2],
+    edge: (usize, Edge),
+    nearest: &mut Option<(f32, (usize, Edge))>,
+) {
+    let Some(at) = pointer else { return };
+    for segment in points.windows(2) {
+        let vector = segment[1] - segment[0];
+        let length = vector.length_sq();
+        if length == 0.0 {
+            continue;
+        }
+        let position = ((at - segment[0]).dot(vector) / length).clamp(0.0, 1.0);
+        let distance = (at - (segment[0] + vector * position)).length_sq();
+        if distance <= 36.0 && nearest.is_none_or(|(prior, _)| distance < prior) {
+            *nearest = Some((distance, edge));
+        }
+    }
+}
+
+fn invert_action(terminal: &Instruction) -> Option<GraphAction> {
+    let patch = BytePatch::invert_branch(terminal)?;
+    Some(GraphAction::Invert(
+        patch,
+        format!(
+            "Invert {} at 0x{:X}. The destination and byte length stay the same.",
+            terminal.text, terminal.address
+        ),
+    ))
+}
+
+fn follow_action(state: &GraphState, target: u64) -> GraphAction {
+    if state.layout.index.contains_key(&target) {
+        GraphAction::Select(target)
+    } else {
+        GraphAction::Follow(target)
+    }
+}
+
+fn details(
+    ui: &mut Ui,
+    state: &GraphState,
+    block: &Block,
+    function: &Function,
+    project: &Project,
+    selected: Option<u64>,
+) -> Option<GraphAction> {
+    let mut action = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.strong(format!("Block 0x{:X}", block.address));
+        for edge in &block.successors {
+            if ui
+                .button(format!("{} -> 0x{:X}", edge_name(edge.kind), edge.target))
+                .clicked()
+            {
+                action = Some(follow_action(state, edge.target));
+            }
+        }
+    });
+    let instructions = block_instructions(function, block);
+    let row_height = ui.spacing().interact_size.y;
+    egui::ScrollArea::both()
+        .max_height(124.0)
+        .auto_shrink([false, true])
+        .id_salt(("block-details", function.address, block.address))
+        .show_rows(ui, row_height, instructions.len(), |ui, rows| {
+            for instruction in &instructions[rows] {
+                ui.horizontal(|ui| {
+                    let text = egui::RichText::new(format!(
+                        "0x{:X}   {}",
+                        instruction.address, instruction.text
+                    ))
+                    .monospace();
+                    let row = ui.selectable_label(selected == Some(instruction.address), text);
+                    if row.clicked() {
+                        action = Some(GraphAction::Select(instruction.address));
+                    }
+                    row.context_menu(|ui| {
+                        if let Some((patch, description)) =
+                            super::editing::branch_menu(ui, instruction)
+                        {
+                            action = Some(GraphAction::Invert(patch, description));
+                        }
+                        if ui.button("Patch bytes here…").clicked() {
+                            action = Some(GraphAction::Patch(instruction.file_offset));
+                            ui.close();
+                        }
+                    });
+                    if let Some(strings) = state.strings.get(&instruction.address) {
+                        for (address, text) in strings {
+                            if ui
+                                .link(format!("{text:?}"))
+                                .on_hover_text(format!("String at 0x{address:X}"))
+                                .clicked()
+                            {
+                                action = Some(GraphAction::Follow(*address));
+                            }
+                        }
+                    }
+                    if let Some(comment) = project
+                        .comment(instruction.address)
+                        .and_then(|comment| comment.lines().next())
+                    {
+                        label(ui, comment);
+                    }
+                });
+            }
+        });
+    action
 }
 
 #[cfg(test)]

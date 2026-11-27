@@ -255,7 +255,8 @@
       "dependencies": [],
       "implementation_files": [
         "crates/engine/src/analysis.rs",
-        "apps/desktop/src/app/flow.rs"
+        "apps/desktop/src/app/flow.rs",
+        "apps/desktop/src/app/selection.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
@@ -264,7 +265,7 @@
         "tests/fixtures/score.c",
         "tests/fixtures/HexarisProbe.java"
       ],
-      "test_results": "The desktop layout regression test includes all 241 blocks. The Windows score fixture capture shows the fit view, focus controls, and branch edges.",
+      "test_results": "The desktop layout regression test includes all 241 blocks. The Windows fixtures exercise graph rendering and branch targets. The desktop smoke test renders a referenced string and preserves a selected range in address-linked Pseudo-C.",
       "visual_validation_status": "VERIFIED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
@@ -302,7 +303,7 @@
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Direct call, branch and RIP-relative operand references only."
+        "Direct calls, direct branches, RIP-relative operands, and mapped absolute memory operands. Indirect targets remain open."
       ]
     },
     {
@@ -417,12 +418,12 @@
         "tests/fixtures/HexarisProbe.java",
         "crates/engine/src/decompile.rs"
       ],
-      "test_results": "Recompiled Windows x64 output matched the source function for 250,008 inputs. Unit tests exercise the signed System V projection and preserve a direct call and backedge in the control-flow listing.",
+      "test_results": "Recompiled Windows x64 output matched the source function for 250,008 inputs. Tests verify the signed System V projection, a direct call and backedge, and address-linked string annotations.",
       "visual_validation_status": "VERIFIED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Structured output covers small acyclic Windows and System V x86-64 leaf functions with supported 32-bit instructions. The register-level x86 listing caps at 1,024 instructions and marks unresolved effects."
+        "Recovered arguments can be named for small acyclic Windows and System V x86-64 leaf functions. General local-variable recovery remains open. The register-level listing caps at 1,024 instructions and marks unresolved effects."
       ]
     },
     {
@@ -458,7 +459,7 @@
       "category": "analysis utilities",
       "reference_version": null,
       "reference_edition": null,
-      "feature_name": "Byte patterns and ASCII strings",
+      "feature_name": "In-view text search, byte patterns, and binary strings",
       "reference_behavior": "Search binary bytes, strings, disassembly and other analysis data.",
       "evidence_source": [
         "docs/REFERENCE_INVENTORY.md"
@@ -467,18 +468,19 @@
       "dependencies": [],
       "implementation_files": [
         "crates/engine/src/search.rs",
+        "apps/desktop/src/app/find.rs",
         "apps/desktop/src/app/views.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
         "crates/engine/tests/workflows.rs"
       ],
-      "test_results": null,
+      "test_results": "Authored fixture checks resolve ASCII and ASCII-range UTF-16LE references. A Windows desktop smoke test verifies the same referenced string in graph and Pseudo-C searches.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Byte wildcards and printable ASCII only."
+        "Binary-wide string search covers printable ASCII and limits the displayed matches. In-view search covers the active representation and decoded references."
       ]
     },
     {
@@ -496,6 +498,7 @@
       "implementation_files": [
         "crates/engine/src/project.rs",
         "apps/desktop/src/app.rs",
+        "apps/desktop/src/app/rename.rs",
         "apps/cli/src/main.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
@@ -504,7 +507,7 @@
         "crates/engine/tests/advanced.rs",
         "scripts/verify-workstation.ps1"
       ],
-      "test_results": "Verified v1 project compatibility, v2 bookmark persistence, annotation removal and integrity handling.",
+      "test_results": "Verified v1 project compatibility, v2 bookmark persistence, v3 recovered argument name round trips, duplicate name rejection, annotation removal, and integrity handling.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
@@ -616,12 +619,12 @@
         "crates/engine/tests/workflows.rs",
         "scripts/verify-windows-fixture.ps1"
       ],
-      "test_results": "Verified exact-byte matching, overlapping edit rejection, no-clobber export, unchanged source, and inverted short and near conditions with the same targets.",
+      "test_results": "Verified exact-byte matching, overlap and no-clobber validation, unchanged source, and invert, always-taken and always-fallthrough actions for short and near conditional jumps.",
       "visual_validation_status": "VERIFIED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Fixed-length export to a new file. The desktop queue is session-only, and inversion covers ordinary short and near x86 conditional jumps. Assembly input and live editing remain open."
+        "Fixed-length export to a new file. The desktop queue is session-only. Branch edits cover ordinary short and near x86 conditional jumps. Assembly input and live editing remain open."
       ]
     },
     {

@@ -51,20 +51,25 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 | Check a file digest | In **Overview**, use **Copy** beside SHA-256. Click the entropy chart to open the corresponding offset in **Hex**. The chart summarizes byte distribution across file ranges. |
 | Read bytes | Open **Hex** for the file offset, bytes, and ASCII representation of each row. Click an exact byte or jump to a file offset using the offset field, the entropy chart, or a search result. |
 | Find byte patterns | Open **Byte search** or **Find bytes**. Enter a pattern such as `83 F8 ??`, where `??` matches one byte. Pick a result to open its offset. |
-| Find strings | Open **Strings**, set a minimum length, and run the scan. Select a printable ASCII result to see where it occurs in the file. |
+| Find text from any view | Press **Ctrl+F**. **Current view** searches the displayed representation and its referenced strings. **Binary strings** searches printable ASCII across the file. Click a code result to jump to it, or a byte result to open Hex. **Ctrl+Shift+F** opens byte search. |
+| Convert numbers or decode hex | Change **Operands** to Hex, Decimal, Octal, or Binary in the workspace. Use **Convert…** to translate a 64-bit integer between bases or decode hex pairs such as `48 69` as UTF-8 text. |
 | Change the appearance | Open **Themes** and choose Graphite, Slate, Ash Light, Foundry, or High Contrast. The menu previews each palette and Hexaris remembers the choice. |
 
 ![Overview in Ash Light with executable metadata, checksum, and file entropy](images/triage.png)
 
 ## Follow code and references
 
-1. Select an entry in **Functions** or type a virtual address and click **Go**. Addresses accept decimal or a `0x` hexadecimal prefix. **Analyze here** explicitly decodes a function at a mapped code address.
+1. Select an entry in **Functions** or type a virtual address and click **Go**. Addresses accept decimal or a `0x` hexadecimal prefix. **Analyze here** explicitly decodes a function at a mapped code address. **Keep code view** is enabled by default. Click **Pseudo-C**, then choose another function to keep seeing Pseudo-C in this tab.
 2. Use **Disassembly** for the selected function or **Linear** to decode successive instructions from an address. Mnemonics, branches and targets, registers, constants, and address comments use theme colors. Right-click a disassembly instruction to copy its address or text. **Back** and **Forward** revisit navigation history.
-3. Open **Control flow** and click **Fit all blocks** to see every decoded block in the selected function. Drag to pan and scroll to zoom around the pointer. Click a block to select it, double-click it to focus, or use **Open disassembly** to jump to its first instruction. In the score fixture, follow the comparison against 10 to the two return paths.
-4. Open **Calls** to see indexed direct callers and callees. The **Inspector** gives incoming and outgoing references for the selected address. Click an address to follow it.
+3. Open **Control flow** and click **Fit all blocks** to see every decoded block in the selected function. Drag to pan, scroll to zoom, and double-click a block to focus. **Block details** shows the block's instruction list, string references, and successor buttons. Click a branch arrow to select the branch instruction. Right-click the arrow for follow and patch options.
+4. Select an instruction and click a link under **Follow address**. Code targets open in the tab's preferred code view and mapped data opens in Hex. **Calls** lists direct callers and callees. The **Inspector** also shows incoming and outgoing references.
 5. Use **Register IR** to inspect projected 32-bit register values and incoming values at block boundaries. **Pseudo-C** opens a structured view for supported x86-64 leaf functions. Switch to **Control-flow** to read the register-level listing with block labels, branches, and calls. Hexaris opens that listing automatically when it cannot produce structured output. Click a line to select its address in the Inspector.
 
+Drag across instruction rows in **Disassembly** or address-linked **Pseudo-C** to highlight a range. In **Control flow**, use **Shift+drag** to select blocks. Switch views to follow the same address range. **Pseudo-C** uses the address-linked representation while a range is active. **Clear highlight** restores the regular display.
+
 ![Control-flow blocks for the score fixture](images/control-flow.png)
+
+![In-view search and clickable string references in the control-flow graph](images/graph-strings.png)
 
 ![Direct callers, callees, and selectable call-site addresses](images/calls.png)
 
@@ -72,23 +77,28 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 
 ![Control-flow Pseudo-C showing calls and a conditional branch in score_window](images/pseudo-c-control-flow.png)
 
+![In-view text search and a carried address highlight in Pseudo-C](images/pseudo-search.png)
+
 ## Keep an investigation
 
-- **Rename a function.** Select it and enter a name under **Function name** in the Inspector. Click **Apply name**.
+- **Rename a function.** Right-click it in **Functions** and choose **Rename function…**, use **Rename…** in the function header, or edit its name in the Inspector.
+- **Rename a recovered argument.** In structured **Pseudo-C**, choose **Rename argument…** and select an identifier such as `arg1`. Enter a C identifier such as `threshold`. Hexaris uses that name in the listing and copied Pseudo-C.
 - **Comment on an address.** Select an instruction or mapped location, enter the note in **Address comment**, and click **Apply comment**. Clearing the field and applying removes the comment.
 - **Bookmark a location.** Press **Ctrl+D** to toggle the bookmark at the selected address. Use the Inspector to name it, then revisit it through **Bookmarks** in the image browser.
-- **Save and reopen.** Press **Ctrl+S** or choose **File → Save project as…**. A `.hxproj` embeds the original binary bytes along with names, comments, and bookmarks. Analysis runs again on reopen. [Project format](PROJECT_FORMAT.md)
+- **Save and reopen.** Press **Ctrl+S** or choose **File → Save project as…**. A `.hxproj` embeds the original binary bytes along with function and argument names, comments, and bookmarks. Analysis runs again on reopen. [Project format](PROJECT_FORMAT.md)
 - **Import notes from Ghidra.** Export the program XML for the same binary, then choose **File → Import Ghidra XML**. Hexaris adds mapped names, comments, and bookmarks while retaining your existing values. [Import instructions](GHIDRA_XML.md)
 
 ![Disassembly and Inspector with the selected instruction and its outgoing reference](images/workbench.png)
 
 ## Export a byte patch
 
-1. In **Hex**, select the first byte to edit and click **Patch selected byte…**. From **Disassembly**, right-click an instruction and choose **Patch bytes here…**. The **Patch bytes…** toolbar button also accepts a file offset directly.
+1. In **Hex**, select the first byte to edit and click **Patch selected byte…**. In **Disassembly**, **Linear**, **Control flow**, or the address-linked **Pseudo-C** listing, right-click code and choose **Patch bytes here…**. The **Patch bytes…** toolbar button also accepts a file offset directly.
 2. Enter replacement bytes, for example `90 90`. The number of bytes you enter sets the length of the edit. Compare the original and replacement, then click **Queue change**. Repeat for any additional offsets. You can remove a queued edit by clicking **Remove**.
 3. Click **Export and open patched copy…** and choose a new output path. Hexaris verifies the original bytes for every queued edit, writes a separate file, and opens it in another tab for reanalysis.
 
 To flip the score fixture’s branch, select the entry block at `0x140001000` in **Control flow** and click **Invert branch…**. Hexaris pre-fills the replacement `73 09` for the original `72 09`, changing `jb` to `jae` while preserving the destination. Queue the change and export the copy, then inspect the same address in the copy’s **Disassembly**. The action supports ordinary short and near x86 conditional jumps.
+
+The branch context menu also offers **Always take branch…** to keep the jump destination and **Always fall through…** to continue at the next instruction. These actions keep the byte length fixed.
 
 ![Branch inversion preview with original and replacement bytes in Patch bytes](images/patch-branch.png)
 

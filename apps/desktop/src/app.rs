@@ -16,11 +16,15 @@ use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, Messag
 use crate::theme::{self, Theme};
 
 mod editing;
+mod find;
 mod flow;
+mod rename;
+mod selection;
 mod tools;
+mod values;
 mod views;
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum View {
     Overview,
     #[default]
@@ -63,6 +67,18 @@ impl View {
             Self::Search => "Byte search",
         }
     }
+
+    fn is_code(self) -> bool {
+        matches!(
+            self,
+            Self::Disassembly
+                | Self::Linear
+                | Self::Flow
+                | Self::Calls
+                | Self::Registers
+                | Self::Pseudocode
+        )
+    }
 }
 
 struct Session {
@@ -99,6 +115,8 @@ enum QueryResult {
 #[derive(Default)]
 struct ViewState {
     view: View,
+    preferred_code_view: View,
+    reset_code_view: bool,
     filter: String,
     browser_tab: usize,
     selected_function: Option<u64>,
@@ -121,6 +139,10 @@ struct ViewState {
     navigation_forward: Vec<(u64, u64)>,
     flow: flow::GraphState,
     pseudo_control_flow: bool,
+    find: find::FindState,
+    pseudo_jump: Option<usize>,
+    number_base: hexaris_engine::NumberBase,
+    selection: selection::AddressSelection,
 }
 
 struct BackgroundTab {
@@ -145,6 +167,9 @@ pub struct App {
     raw_base: String,
     raw_arch: Architecture,
     mark: Option<TextureHandle>,
+    artwork: Option<TextureHandle>,
+    values: values::Converter,
+    rename: Option<rename::RenameDialog>,
     open_icon: Option<TextureHandle>,
     save_icon: Option<TextureHandle>,
     search_icon: Option<TextureHandle>,
@@ -172,7 +197,10 @@ impl App {
             tools_dialog: None,
             raw_base: "0x1000".into(),
             raw_arch: Architecture::X86_64,
-            mark: theme::artwork_texture(ctx),
+            mark: theme::brand_texture(ctx),
+            artwork: theme::artwork_texture(ctx),
+            values: values::Converter::default(),
+            rename: None,
             open_icon: theme::tabler(
                 ctx,
                 "open-file",
@@ -303,6 +331,7 @@ impl App {
                 .insert(self.version, BackgroundTab { session, state });
         }
         self.patch_dialog = None;
+        self.rename = None;
     }
 
     fn open_tab(&mut self, ctx: &Context, session: Session) {
@@ -445,6 +474,10 @@ impl App {
     }
 
     fn select(&mut self, function: Option<u64>, address: Option<u64>) {
+        if self.state.selected_function != function {
+            self.state.selection.clear();
+            self.state.pseudo_jump = None;
+        }
         self.state.selected_function = function;
         self.state.selected_address = address;
         let session = self.session.as_ref();
@@ -505,7 +538,18 @@ impl App {
                     .zip(self.state.selected_address),
             );
             self.select(Some(function), Some(address));
-            self.state.view = View::Disassembly;
+            self.follow_code_view(address);
+        }
+    }
+
+    fn follow_code_view(&mut self, address: u64) {
+        self.state.view = if self.state.reset_code_view {
+            View::Disassembly
+        } else {
+            self.state.preferred_code_view
+        };
+        if self.state.view == View::Linear {
+            self.decode_linear(address);
         }
     }
 
@@ -562,7 +606,7 @@ impl App {
         };
         if let Some(function) = owner {
             self.navigate(function, address);
-            self.state.view = View::Disassembly;
+            self.follow_code_view(address);
         } else if let Some(offset) = session.project.image().file_offset(address) {
             self.show_hex(offset);
         } else {
@@ -597,7 +641,7 @@ impl App {
                 session.lifted.remove(&address);
                 session.pseudocode.remove(&address);
                 self.navigate(address, address);
-                self.state.view = View::Disassembly;
+                self.follow_code_view(address);
             }
             Err(error) => self.error(error),
         }
@@ -956,10 +1000,15 @@ impl eframe::App for App {
         {
             self.activate(ctx, id);
         }
-        if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, Key::F))
-            && self.session.is_some()
+        if ctx.input_mut(|input| {
+            input.consume_key(egui::Modifiers::COMMAND | egui::Modifiers::SHIFT, Key::F)
+        }) && self.session.is_some()
         {
             self.state.view = View::Search;
+        } else if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, Key::F))
+            && self.session.is_some()
+        {
+            self.state.find.open();
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, Key::D))
             && let Some(address) = self.state.selected_address
@@ -1018,8 +1067,8 @@ impl eframe::App for App {
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space((ui.available_height() * 0.29).max(35.0));
-                        if let Some(mark) = &self.mark {
-                            ui.image((mark.id(), egui::vec2(128.0, 128.0)));
+                        if let Some(artwork) = &self.artwork {
+                            ui.image((artwork.id(), egui::vec2(128.0, 128.0)));
                         }
                         ui.add_space(12.0);
                         ui.label(RichText::new("Open a binary").size(32.0).strong());
@@ -1053,6 +1102,8 @@ impl eframe::App for App {
             self.raw_window(ctx);
         }
         self.patch_window(ctx);
+        self.rename_window(ctx);
+        self.values.show(ctx);
         self.tools_window(ctx);
     }
 }

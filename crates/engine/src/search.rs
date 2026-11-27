@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{Error, Image, Result};
 use serde::Serialize;
 
 pub struct BytePattern {
@@ -79,4 +79,30 @@ pub fn scan_strings(bytes: &[u8], min_length: usize) -> impl Iterator<Item = Str
                 byte_count: range.len(),
             })
         })
+}
+
+/// Preview terminated ASCII, or ASCII-range UTF-16LE, at a mapped data address.
+pub fn string_at(image: &Image, address: u64) -> Option<String> {
+    let bytes = image.mapped_bytes(address)?;
+    let printable =
+        |byte: u8| byte.is_ascii_graphic() || matches!(byte, b' ' | b'\r' | b'\n' | b'\t');
+    let ascii_len = bytes
+        .iter()
+        .take(257)
+        .take_while(|&&byte| printable(byte))
+        .count();
+    if (4..=256).contains(&ascii_len) && bytes.get(ascii_len) == Some(&0) {
+        return Some(String::from_utf8_lossy(&bytes[..ascii_len]).into_owned());
+    }
+    let mut chars = Vec::new();
+    for &[low, high] in bytes.as_chunks::<2>().0.iter().take(257) {
+        if low == 0 && high == 0 {
+            return (chars.len() >= 4).then(|| String::from_utf8_lossy(&chars).into_owned());
+        }
+        if high != 0 || !printable(low) {
+            break;
+        }
+        chars.push(low);
+    }
+    None
 }

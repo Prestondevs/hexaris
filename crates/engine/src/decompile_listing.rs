@@ -1,9 +1,9 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt::Write};
 
 use iced_x86::{ConditionCode, FlowControl, Mnemonic, OpKind};
 use serde::Serialize;
 
-use crate::{EdgeKind, Function, Instruction};
+use crate::{EdgeKind, Function, Image, Instruction, ReferenceKind, string_at};
 
 const INSTRUCTION_LIMIT: usize = 1_024;
 
@@ -29,7 +29,7 @@ pub struct PseudoLine {
     pub text: String,
 }
 
-pub(crate) fn render(function: &Function) -> Option<ControlFlowCode> {
+pub(crate) fn render(image: &Image, function: &Function) -> Option<ControlFlowCode> {
     if function.blocks.is_empty() {
         return None;
     }
@@ -79,7 +79,7 @@ pub(crate) fn render(function: &Function) -> Option<ControlFlowCode> {
                     .map(|edge| destination(edge.target))
             };
             let decoded = &instruction.decoded;
-            let text = match decoded.flow_control() {
+            let mut text = match decoded.flow_control() {
                 FlowControl::ConditionalBranch => {
                     let condition = if decoded.is_jcc_short_or_near() {
                         branch_condition(decoded.condition_code()).to_owned()
@@ -110,6 +110,17 @@ pub(crate) fn render(function: &Function) -> Option<ControlFlowCode> {
                 }
                 _ => describe(instruction),
             };
+            let first = function
+                .references
+                .partition_point(|reference| reference.source < instruction.address);
+            if let Some(string) = function.references[first..]
+                .iter()
+                .take_while(|reference| reference.source == instruction.address)
+                .filter(|reference| reference.kind == ReferenceKind::Address)
+                .find_map(|reference| string_at(image, reference.target))
+            {
+                let _ = write!(text, "   // {string:?}");
+            }
             lines.push(PseudoLine {
                 address: Some(instruction.address),
                 text: format!("    {text}"),

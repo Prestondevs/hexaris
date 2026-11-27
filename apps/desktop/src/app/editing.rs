@@ -1,10 +1,48 @@
 use std::path::Path;
 
-use hexaris_engine::{BytePatch, parse_address, write_patched_copy};
+use hexaris_engine::{BranchEdit, BytePatch, Instruction, parse_address, write_patched_copy};
 
 use super::{App, Button, Context, FileDialog, RichText, ScrollArea, egui, views::hex_bytes};
 
 const MAX_PENDING: usize = 128;
+
+pub(super) fn branch_menu(
+    ui: &mut super::Ui,
+    instruction: &Instruction,
+) -> Option<(BytePatch, String)> {
+    BytePatch::invert_branch(instruction)?;
+    for (edit, label, effect) in [
+        (
+            BranchEdit::Invert,
+            "Invert branch…",
+            "Invert the condition and keep the branch destination.",
+        ),
+        (
+            BranchEdit::AlwaysTaken,
+            "Always take branch…",
+            "Jump to the original destination on every path.",
+        ),
+        (
+            BranchEdit::AlwaysFallthrough,
+            "Always fall through…",
+            "Continue at the next instruction on every path.",
+        ),
+    ] {
+        if ui.button(label).clicked() {
+            ui.close();
+            return BytePatch::edit_branch(instruction, edit).map(|patch| {
+                (
+                    patch,
+                    format!(
+                        "{} at 0x{:X}. {effect}",
+                        instruction.text, instruction.address
+                    ),
+                )
+            });
+        }
+    }
+    None
+}
 
 #[derive(Default)]
 pub(super) struct PatchDialog {

@@ -1,7 +1,9 @@
 use std::fmt::Write as _;
 
 use eframe::egui::{self, Align2, FontId, Grid, Rect, Sense, Stroke, pos2, vec2};
-use hexaris_engine::{CallSite, Image, Instruction, InstructionToken, Reference, Region};
+use hexaris_engine::{
+    CallSite, Image, Instruction, InstructionToken, NumberBase, Reference, Region,
+};
 
 use super::*;
 
@@ -31,6 +33,7 @@ impl App {
         let mut target = None;
         let mut offset = None;
         let mut context_target = None;
+        let mut rename_target = None;
         match self.state.browser_tab {
             0 => {
                 ui.add(
@@ -77,6 +80,10 @@ impl App {
                                 target = Some(function.address);
                             }
                             response.context_menu(|ui| {
+                                if ui.button("Rename function…").clicked() {
+                                    rename_target = Some(function.address);
+                                    ui.close();
+                                }
                                 if ui.button("Function context…").clicked() {
                                     context_target = Some(function.address);
                                     ui.close();
@@ -195,6 +202,9 @@ impl App {
         if let Some(address) = context_target {
             self.open_context(address);
         }
+        if let Some(address) = rename_target {
+            self.open_rename(address, 0);
+        }
     }
 
     pub(super) fn workspace(&mut self, ui: &mut Ui) {
@@ -252,7 +262,18 @@ impl App {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().button_padding.x = 7.0;
             for view in View::ALL {
-                ui.selectable_value(&mut self.state.view, view, view.label());
+                if ui.selectable_value(&mut self.state.view, view, view.label()).clicked()
+                    && view.is_code()
+                {
+                    self.state.preferred_code_view = view;
+                }
+            }
+            let mut keep_view = !self.state.reset_code_view;
+            if ui.toggle_value(&mut keep_view, "Keep code view")
+                .on_hover_text("Reuse the last code view when opening a function or following a code address in this tab.")
+                .changed()
+            {
+                self.state.reset_code_view = !keep_view;
             }
         });
         if self.state.view == View::Linear
@@ -261,6 +282,21 @@ impl App {
         {
             self.decode_linear(address);
         }
+        self.find_text(ui);
+        ui.horizontal_wrapped(|ui| {
+            label(ui, "Operands");
+            values::base_picker(ui, "operand-base", &mut self.state.number_base);
+            if ui.small_button("Convert…").clicked() {
+                self.values.open = true;
+            }
+            if let Some((first, last)) = self.state.selection.range {
+                ui.monospace(format!("0x{first:X}–0x{last:X}"));
+                if ui.small_button("Clear highlight").clicked() {
+                    self.state.selection.clear();
+                }
+            }
+        });
+        self.selected_links(ui);
         ui.separator();
         if let Some(session) = &self.session {
             for notice in &session.analysis.notices {
@@ -292,10 +328,7 @@ impl App {
         if let Some(function) = session.analysis.functions.get(&address) {
             ui.heading(session.function_name(function));
         }
-        label(
-            ui,
-            "Select a function or call site to open it in disassembly.",
-        );
+        label(ui, "Select a function or call site to follow it.");
         let selection = ui.columns(2, |columns| {
             let caller = call_rows(&mut columns[0], self.version, session, address, true);
             let callee = call_rows(&mut columns[1], self.version, session, address, false);
@@ -304,10 +337,51 @@ impl App {
         match selection {
             Some(CallSelection::Site(caller, site)) => {
                 self.navigate(caller, site);
-                self.state.view = View::Disassembly;
+                self.follow_code_view(site);
             }
             Some(CallSelection::Function(target)) => self.goto(target),
             None => {}
+        }
+    }
+
+    fn selected_links(&mut self, ui: &mut Ui) {
+        if !self.state.view.is_code() {
+            return;
+        }
+        let Some((session, address)) = self.session.as_ref().zip(self.state.selected_address)
+        else {
+            return;
+        };
+        let references = session.references.outgoing(address);
+        if references.is_empty() {
+            return;
+        }
+        let mut target = None;
+        ui.horizontal_wrapped(|ui| {
+            label(ui, "Follow address");
+            for reference in references.iter().take(8) {
+                let name = session.project.function_name(reference.target).or_else(|| {
+                    session
+                        .analysis
+                        .functions
+                        .get(&reference.target)
+                        .map(|function| function.name.as_str())
+                });
+                let title = name.map_or_else(
+                    || format!("0x{:X}", reference.target),
+                    |name| format!("{name} · 0x{:X}", reference.target),
+                );
+                if ui
+                    .link(title)
+                    .on_hover_text(format!("{:?} reference from 0x{address:X}", reference.kind))
+                    .clicked()
+                {
+                    target = Some(reference.target);
+                }
+            }
+        });
+        if let Some(address) = target {
+            self.goto(address);
         }
     }
 
@@ -402,6 +476,8 @@ impl App {
         };
         let mut selected = None;
         let mut next = None;
+        let mut patch_offset = None;
+        let mut branch_patch = None;
         ui.horizontal_wrapped(|ui| {
             ui.heading(format!("Sequential decode from 0x{:X}", listing.start));
             if let Some(address) = listing.next_address
@@ -425,20 +501,21 @@ impl App {
                 ui.spacing_mut().interact_size.y = ROW;
                 ui.spacing_mut().button_padding.y = 2.0;
                 for instruction in &listing.instructions[range] {
-                    let text = instruction_text(instruction, "", palette);
-                    if ui
-                        .add(
-                            Button::selectable(
-                                self.state.selected_address == Some(instruction.address),
-                                text,
-                            )
-                            .wrap_mode(egui::TextWrapMode::Extend)
-                            .min_size(vec2(ui.available_width(), ROW)),
+                    let text = instruction_text(instruction, "", palette, self.state.number_base);
+                    let row = ui.add(
+                        Button::selectable(
+                            self.state.selected_address == Some(instruction.address),
+                            text,
                         )
-                        .clicked()
-                    {
+                        .wrap_mode(egui::TextWrapMode::Extend)
+                        .min_size(vec2(ui.available_width(), ROW)),
+                    );
+                    if row.clicked() {
                         selected = Some(instruction.address);
                     }
+                    row.context_menu(|ui| {
+                        patch_options(ui, instruction, &mut patch_offset, &mut branch_patch);
+                    });
                 }
             });
         if let Some(address) = selected {
@@ -446,6 +523,11 @@ impl App {
         }
         if let Some(address) = next {
             self.decode_linear(address);
+        }
+        if let Some((patch, description)) = branch_patch {
+            self.open_branch_patch(patch, description);
+        } else if let Some(offset) = patch_offset {
+            self.open_patch(Some(offset));
         }
     }
 
@@ -465,8 +547,12 @@ impl App {
             );
             return;
         };
+        let mut rename = None;
         ui.horizontal_wrapped(|ui| {
             ui.heading(session.function_name(function));
+            if ui.small_button("Rename…").clicked() {
+                rename = Some(0);
+            }
             ui.label(
                 RichText::new(format!("0x{:X}", function.address))
                     .monospace()
@@ -491,6 +577,7 @@ impl App {
         let mut target = None;
         let mut edit_offset = None;
         let mut branch_patch = None;
+        let mut graph_target = None;
         match self.state.view {
             View::Disassembly => {
                 let mut area = ScrollArea::both()
@@ -512,31 +599,42 @@ impl App {
                             .lines()
                             .next()
                             .unwrap_or_default();
-                        let text = instruction_text(instruction, comment, palette);
+                        let text =
+                            instruction_text(instruction, comment, palette, self.state.number_base);
                         let button = Button::selectable(
-                            self.state.selected_address == Some(instruction.address),
+                            self.state.selected_address == Some(instruction.address)
+                                || self.state.selection.contains(instruction.address),
                             text,
                         )
+                        .sense(Sense::click_and_drag())
                         .wrap_mode(egui::TextWrapMode::Extend)
                         .min_size(vec2(ui.available_width(), ROW));
                         let response = ui.add(button);
+                        self.state.selection.interact(
+                            ui,
+                            &response,
+                            instruction.address,
+                            self.state.selected_address,
+                        );
                         if response.clicked() {
                             target = Some(instruction.address);
                         }
                         response.context_menu(|ui| {
-                            if ui.button("Patch bytes here…").clicked() {
-                                edit_offset = Some(instruction.file_offset);
-                                ui.close();
-                            }
-                            if let Some(patch) = BytePatch::invert_branch(instruction)
-                                && ui.button("Invert branch…").clicked()
+                            for reference in session
+                                .references
+                                .outgoing(instruction.address)
+                                .iter()
+                                .take(8)
                             {
-                                branch_patch = Some((patch, format!(
-                                    "Invert {} at 0x{:X}. The destination and byte length stay the same.",
-                                    instruction.text, instruction.address
-                                )));
-                                ui.close();
+                                if ui
+                                    .button(format!("Follow 0x{:X}…", reference.target))
+                                    .clicked()
+                                {
+                                    graph_target = Some(reference.target);
+                                    ui.close();
+                                }
                             }
+                            patch_options(ui, instruction, &mut edit_offset, &mut branch_patch);
                             if ui.button("Copy virtual address").clicked() {
                                 ui.ctx().copy_text(format!("0x{:X}", instruction.address));
                                 ui.close();
@@ -554,7 +652,10 @@ impl App {
                     ui,
                     &mut self.state.flow,
                     function,
+                    &session.project,
                     self.state.selected_address,
+                    &self.state.selection,
+                    self.state.number_base,
                 ) {
                     Some(flow::GraphAction::Select(address)) => target = Some(address),
                     Some(flow::GraphAction::Disassemble(address)) => {
@@ -563,6 +664,12 @@ impl App {
                     }
                     Some(flow::GraphAction::Invert(patch, description)) => {
                         branch_patch = Some((patch, description))
+                    }
+                    Some(flow::GraphAction::Follow(address)) => graph_target = Some(address),
+                    Some(flow::GraphAction::Patch(offset)) => edit_offset = Some(offset),
+                    Some(flow::GraphAction::Highlight(first, last)) => {
+                        self.state.selection.set(first, last);
+                        target = Some(first);
                     }
                     None => {}
                 }
@@ -659,11 +766,13 @@ impl App {
                         );
                     });
                 }
-                let structured = result
-                    .code
-                    .as_ref()
-                    .filter(|_| !self.state.pseudo_control_flow || result.control_flow.is_none());
+                let structured = result.code.as_ref().filter(|_| {
+                    (!self.state.pseudo_control_flow && self.state.selection.range.is_none())
+                        || result.control_flow.is_none()
+                });
                 if let Some(code) = structured {
+                    let arguments = rename::argument_count(code);
+                    let code = rename::named_structured(&session.project, function.address, code);
                     ui.horizontal_wrapped(|ui| {
                         label(
                             ui,
@@ -672,12 +781,54 @@ impl App {
                         if ui.button("Copy pseudocode").clicked() {
                             ui.ctx().copy_text(code.clone());
                         }
+                        if arguments > 0 && ui.button("Rename argument…").clicked() {
+                            rename = Some(arguments);
+                        }
                     });
-                    ScrollArea::both()
-                        .id_salt(("structured", self.version, function.address))
-                        .show(ui, |ui| {
-                            ui.monospace(code);
-                        });
+                    let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+                    let mut area =
+                        ScrollArea::both().id_salt(("structured", self.version, function.address));
+                    if let Some(row) = self.state.pseudo_jump.take() {
+                        area = area.vertical_scroll_offset(
+                            (row_height + ui.spacing().item_spacing.y)
+                                * row.saturating_sub(2) as f32,
+                        );
+                    }
+                    area.show(ui, |ui| {
+                        for line in code.lines() {
+                            let text = RichText::new(line).monospace();
+                            let row = ui.add(
+                                egui::Label::new(if self.state.find.matches(line) {
+                                    text.background_color(ui.visuals().selection.bg_fill)
+                                } else {
+                                    text
+                                })
+                                .extend()
+                                .sense(Sense::click()),
+                            );
+                            row.context_menu(|ui| {
+                                if arguments > 0 && ui.button("Rename argument…").clicked() {
+                                    rename = Some(arguments);
+                                    ui.close();
+                                }
+                                if let Some(address) = self.state.selected_address
+                                    && let Ok(index) = function
+                                        .instructions
+                                        .binary_search_by_key(&address, |instruction| {
+                                            instruction.address
+                                        })
+                                {
+                                    label(ui, &format!("Selected instruction 0x{address:X}"));
+                                    patch_options(
+                                        ui,
+                                        &function.instructions[index],
+                                        &mut edit_offset,
+                                        &mut branch_patch,
+                                    );
+                                }
+                            });
+                        }
+                    });
                 } else if let Some(listing) = &result.control_flow {
                     ui.horizontal_wrapped(|ui| {
                         label(ui, "Control-flow pseudocode · registers, labels, and calls");
@@ -688,35 +839,103 @@ impl App {
                     if let Some(reason) = &result.unavailable {
                         label(ui, &format!("Structured view unavailable · {reason}"));
                     }
+                    if self.state.selection.range.is_some() && !self.state.pseudo_control_flow {
+                        label(ui, "Showing address-linked code for the highlighted range.");
+                    }
                     let row_height = ui.spacing().interact_size.y.max(ROW);
-                    ScrollArea::both()
-                        .id_salt(("control_flow_code", self.version, function.address))
-                        .show_rows(ui, row_height, listing.lines.len(), |ui, rows| {
-                            for line in &listing.lines[rows] {
-                                let code = RichText::new(&line.text).monospace();
-                                if let Some(address) = line.address {
-                                    let current = self.state.selected_address == Some(address);
-                                    if ui
-                                        .add(
-                                            Button::selectable(current, code)
-                                                .wrap_mode(egui::TextWrapMode::Extend)
-                                                .min_size(vec2(ui.available_width(), row_height)),
-                                        )
-                                        .on_hover_text(format!("Select 0x{address:X}"))
-                                        .clicked()
-                                    {
-                                        target = Some(address);
-                                    }
-                                } else {
-                                    ui.horizontal(|ui| {
-                                        ui.set_min_height(row_height);
-                                        ui.add(
-                                            egui::Label::new(code.color(palette.muted)).extend(),
-                                        );
-                                    });
+                    let mut area = ScrollArea::both().id_salt((
+                        "control_flow_code",
+                        self.version,
+                        function.address,
+                    ));
+                    if let Some(row) = self.state.pseudo_jump.take() {
+                        area = area.vertical_scroll_offset(
+                            (row_height + ui.spacing().item_spacing.y)
+                                * row.saturating_sub(2) as f32,
+                        );
+                    } else if let Some(address) = self.state.selection.range.map(|(first, _)| first)
+                        && let Some(row) = listing
+                            .lines
+                            .iter()
+                            .position(|line| line.address == Some(address))
+                        && ui.ctx().data_mut(|data| {
+                            let key = egui::Id::new((
+                                "last-highlight-scroll",
+                                self.version,
+                                function.address,
+                            ));
+                            let before = data.get_temp::<u64>(key);
+                            data.insert_temp(key, address);
+                            before != Some(address)
+                        })
+                    {
+                        area = area.vertical_scroll_offset(
+                            (row_height + ui.spacing().item_spacing.y)
+                                * row.saturating_sub(2) as f32,
+                        );
+                    }
+                    area.show_rows(ui, row_height, listing.lines.len(), |ui, rows| {
+                        for line in &listing.lines[rows] {
+                            let code = RichText::new(&line.text).monospace();
+                            let code = if self.state.find.matches(&line.text) {
+                                code.background_color(ui.visuals().selection.bg_fill)
+                            } else {
+                                code
+                            };
+                            if let Some(address) = line.address {
+                                let current = self.state.selected_address == Some(address)
+                                    || self.state.selection.contains(address);
+                                let row = ui
+                                    .add(
+                                        Button::selectable(current, code)
+                                            .sense(Sense::click_and_drag())
+                                            .wrap_mode(egui::TextWrapMode::Extend)
+                                            .min_size(vec2(ui.available_width(), row_height)),
+                                    )
+                                    .on_hover_text(format!("Select 0x{address:X}"));
+                                self.state.selection.interact(
+                                    ui,
+                                    &row,
+                                    address,
+                                    self.state.selected_address,
+                                );
+                                if row.clicked() {
+                                    target = Some(address);
                                 }
+                                row.context_menu(|ui| {
+                                    if let Ok(index) = function
+                                        .instructions
+                                        .binary_search_by_key(&address, |instruction| {
+                                            instruction.address
+                                        })
+                                    {
+                                        patch_options(
+                                            ui,
+                                            &function.instructions[index],
+                                            &mut edit_offset,
+                                            &mut branch_patch,
+                                        );
+                                    }
+                                    for reference in
+                                        session.references.outgoing(address).iter().take(8)
+                                    {
+                                        if ui
+                                            .button(format!("Follow 0x{:X}…", reference.target))
+                                            .clicked()
+                                        {
+                                            graph_target = Some(reference.target);
+                                            ui.close();
+                                        }
+                                    }
+                                });
+                            } else {
+                                ui.horizontal(|ui| {
+                                    ui.set_min_height(row_height);
+                                    ui.add(egui::Label::new(code.color(palette.muted)).extend());
+                                });
                             }
-                        });
+                        }
+                    });
                 } else if let Some(reason) = &result.unavailable {
                     ui.label(RichText::new(reason).color(palette.warn));
                 }
@@ -726,6 +945,12 @@ impl App {
         let function_address = function.address;
         if let Some(address) = target {
             self.navigate(function_address, address);
+        }
+        if let Some(address) = graph_target {
+            self.goto(address);
+        }
+        if let Some(arguments) = rename {
+            self.open_rename(function_address, arguments);
         }
         if let Some((patch, description)) = branch_patch {
             self.open_branch_patch(patch, description);
@@ -1264,6 +1489,7 @@ fn instruction_text(
     instruction: &Instruction,
     comment: &str,
     palette: theme::Palette,
+    base: NumberBase,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut append = |text: &str, color| {
@@ -1285,20 +1511,38 @@ fn instruction_text(
         ),
         palette.muted,
     );
-    instruction.visit_tokens(|token, kind| {
-        let color = match kind {
-            InstructionToken::Text => palette.text,
-            InstructionToken::Mnemonic => palette.accent,
-            InstructionToken::ControlFlow | InstructionToken::Target => palette.warn,
-            InstructionToken::Register => palette.register,
-            InstructionToken::Number => palette.number,
-        };
-        append(token, color);
+    instruction.visit_tokens_in(base, |token, kind| {
+        append(token, syntax_color(palette, kind));
     });
     if !comment.is_empty() {
         append(&format!("    ; {comment}"), palette.muted);
     }
     job
+}
+
+fn patch_options(
+    ui: &mut Ui,
+    instruction: &Instruction,
+    offset: &mut Option<usize>,
+    branch: &mut Option<(BytePatch, String)>,
+) {
+    if ui.button("Patch bytes here…").clicked() {
+        *offset = Some(instruction.file_offset);
+        ui.close();
+    }
+    if let Some(edit) = editing::branch_menu(ui, instruction) {
+        *branch = Some(edit);
+    }
+}
+
+pub(super) fn syntax_color(palette: theme::Palette, kind: InstructionToken) -> egui::Color32 {
+    match kind {
+        InstructionToken::Text => palette.text,
+        InstructionToken::Mnemonic => palette.accent,
+        InstructionToken::ControlFlow | InstructionToken::Target => palette.warn,
+        InstructionToken::Register => palette.register,
+        InstructionToken::Number => palette.number,
+    }
 }
 
 pub(super) fn hex_bytes(bytes: &[u8]) -> String {

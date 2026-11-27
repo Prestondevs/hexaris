@@ -207,6 +207,11 @@ impl Image {
         self.mapping(address).map(|(range, _)| range.start)
     }
 
+    pub(crate) fn mapped_bytes(&self, address: u64) -> Option<&[u8]> {
+        let (range, _) = self.mapping(address)?;
+        self.bytes.get(range)
+    }
+
     pub fn virtual_address(&self, offset: usize) -> Option<u64> {
         for region in self.regions() {
             let (Some(start), Some(base)) = (region.file_offset, region.address) else {
