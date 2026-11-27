@@ -5,14 +5,7 @@
       <stop offset="42%" stop-color="#ffffff"/>
       <stop offset="1" stop-color="#a1a1a1"/>
     </radialGradient>
-    <clipPath id="tile">
-      <rect x="8" y="8" width="240" height="240" rx="46"/>
-    </clipPath>
-  </defs>
-  <rect x="8" y="8" width="240" height="240" rx="46" fill="#000000"/>
-  <g clip-path="url(#tile)">
-    <path fill="url(#ink)" transform="translate(128 129) scale(2.16 2.03) translate(-100 -95)"
-      d="M100 30h1v1h-1z
+    <path id="eye" d="M100 30h1v1h-1z
     M100 31h1v1h-1z
     M100 32h1v1h-1zM109 32h1v1h-1z
     M100 33h1v1h-1z
@@ -141,6 +134,9 @@
     M99 157h1v1h-1z
     M99 158h1v1h-1z
     M99 159h1v1h-1z"/>
+  </defs>
+  <g transform="translate(128 128) scale(1.68 1.82) translate(-100 -95)">
+    <use href="#eye" fill="none" stroke="#161616" stroke-width="1.5" stroke-linejoin="round"/>
+    <use href="#eye" fill="url(#ink)"/>
   </g>
-  <rect x="9" y="9" width="238" height="238" rx="45" fill="none" stroke="#444444" stroke-width="2"/>
 </svg>

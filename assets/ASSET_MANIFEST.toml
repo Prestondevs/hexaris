@@ -2,14 +2,14 @@
 file = "branding/hexaris-icon.svg"
 source = "Braille artwork supplied by the project owner"
 license = "MIT (Hexaris vector adaptation)"
-modifications = "Rendered the supplied dot grid in white on black and framed a square crop around the eye."
+modifications = "Rendered the supplied dot grid in grayscale with a transparent square canvas and a dark outline."
 usage = "Welcome screen, desktop header, window icon, and embedded Windows application icon"
 
 [[asset]]
 file = "../docs/images/hexaris-eye-banner.svg"
 source = "Braille artwork supplied by the project owner"
 license = "MIT (Hexaris vector adaptation)"
-modifications = "Rendered the complete dot pattern in white on a wide black canvas."
+modifications = "Centered the complete dot pattern on a transparent canvas for use on light and dark backgrounds."
 usage = "README banner"
 
 [[collection]]

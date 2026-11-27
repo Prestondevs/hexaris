@@ -12,4 +12,4 @@ Disassembly and Linear use formatter tokens and theme colors. The control-flow c
 
 The desktop keeps the selected code representation during function navigation and shares address highlights between the graph, disassembly, and address-linked Pseudo-C. It has in-view text search, operand base controls, a value converter, argument names in version 3 projects, and branch patch menus. Static testing of a local training executable is tracked in the test report without publishing the input or its analysis export. [User guide](USER_GUIDE.md)
 
-The README banner and app icon render the same supplied Braille dot artwork. The app uses the square SVG for the welcome screen and desktop header, and the Windows MSVC build embeds multiple sizes in the executable. [Asset manifest](../assets/ASSET_MANIFEST.toml)
+The README banner and app icon render the same supplied Braille dot artwork on transparent canvases. The app uses the square SVG for the welcome screen and desktop header, and the Windows MSVC build embeds multiple sizes in the executable. [Asset manifest](../assets/ASSET_MANIFEST.toml)

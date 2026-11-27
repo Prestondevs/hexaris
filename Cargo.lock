@@ -1374,7 +1374,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hexaris-cli"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "clap",
  "hexaris-engine",
@@ -1383,7 +1383,7 @@ dependencies = [
 
 [[package]]
 name = "hexaris-desktop"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "eframe",
  "hexaris-engine",
@@ -1396,7 +1396,7 @@ dependencies = [
 
 [[package]]
 name = "hexaris-engine"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "iced-x86",
  "object",

@@ -6,11 +6,7 @@
       <stop offset=".67" stop-color="#d2d2d2"/>
       <stop offset="1" stop-color="#858585"/>
     </radialGradient>
-  </defs>
-  <rect width="1440" height="440" fill="#000000"/>
-  <path d="M34 76V34h42m1288 0h42v42M34 364v42h42m1288 0h42v-42" fill="none" stroke="#484848" stroke-width="2"/>
-  <path fill="url(#ink)" transform="translate(720 220) scale(4.15 3) translate(-100 -95)"
-    d="M100 30h1v1h-1z
+    <path id="eye" d="M100 30h1v1h-1z
     M100 31h1v1h-1z
     M100 32h1v1h-1zM109 32h1v1h-1z
     M100 33h1v1h-1z
@@ -139,4 +135,9 @@
     M99 157h1v1h-1z
     M99 158h1v1h-1z
     M99 159h1v1h-1z"/>
+  </defs>
+  <g transform="translate(720 220) scale(4.15 3) translate(-100 -95)">
+    <use href="#eye" fill="none" stroke="#181818" stroke-width=".8" stroke-linejoin="round"/>
+    <use href="#eye" fill="url(#ink)"/>
+  </g>
 </svg>

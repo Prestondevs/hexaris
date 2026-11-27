@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/hexaris-eye-banner.svg" width="100%" alt="The Hexaris eye, drawn in white Braille dots on a black background">
+  <img src="docs/images/hexaris-eye-banner.svg" width="100%" alt="The Hexaris eye, drawn in Braille dots on a transparent background">
 </p>
 
 <h1 align="center">Hexaris</h1>
