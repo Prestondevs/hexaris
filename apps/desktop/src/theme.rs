@@ -2,7 +2,7 @@ use eframe::egui::{
     self, Color32, ColorImage, Context, FontId, IconData, Stroke, TextureHandle, TextureOptions,
 };
 
-pub const MARK: &[u8] = include_bytes!("../../../assets/branding/hexaris.svg");
+const ARTWORK: &[u8] = include_bytes!("../../../assets/branding/starry-night.png");
 pub const STORAGE_KEY: &str = "hexaris.theme";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -244,41 +244,27 @@ fn raster(svg: &[u8], size: u32) -> Option<Vec<u8>> {
     Some(pixmap.take())
 }
 
-pub fn texture(ctx: &Context, name: &str, svg: &[u8], size: u32) -> Option<TextureHandle> {
-    let rgba = raster(svg, size)?;
+pub fn artwork_texture(ctx: &Context) -> Option<TextureHandle> {
+    let icon = eframe::icon_data::from_png_bytes(ARTWORK).ok()?;
     Some(ctx.load_texture(
-        name,
-        ColorImage::from_rgba_premultiplied([size as usize; 2], &rgba),
+        "hexaris-artwork",
+        ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba),
         TextureOptions::LINEAR,
     ))
 }
 
 pub fn window_icon() -> IconData {
-    let Some(mut rgba) = raster(MARK, 64) else {
-        return IconData::default();
-    };
-    for pixel in rgba.as_chunks_mut::<4>().0 {
-        let alpha = u32::from(pixel[3]);
-        if alpha > 0 && alpha < 255 {
-            for channel in &mut pixel[..3] {
-                *channel = ((u32::from(*channel) * 255 + alpha / 2) / alpha).min(255) as u8;
-            }
-        }
-    }
-    IconData {
-        rgba,
-        width: 64,
-        height: 64,
-    }
+    eframe::icon_data::from_png_bytes(ARTWORK).unwrap_or_default()
 }
 
 pub fn tabler(ctx: &Context, name: &str, svg: &str) -> Option<TextureHandle> {
-    texture(
-        ctx,
+    let size = 48;
+    let rgba = raster(svg.replace("currentColor", "#FFFFFF").as_bytes(), size)?;
+    Some(ctx.load_texture(
         name,
-        svg.replace("currentColor", "#FFFFFF").as_bytes(),
-        48,
-    )
+        ColorImage::from_rgba_premultiplied([size as usize; 2], &rgba),
+        TextureOptions::LINEAR,
+    ))
 }
 
 #[cfg(test)]

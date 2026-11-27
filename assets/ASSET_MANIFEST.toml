@@ -2,7 +2,13 @@
 file = "branding/hexaris.svg"
 source = "Hexaris contributors"
 license = "MIT"
-usage = "Application mark, window icon, and welcome screen"
+usage = "Original Hexaris mark"
+
+[[asset]]
+file = "branding/starry-night.png"
+source = "Original artwork for Hexaris"
+license = "MIT"
+usage = "Window icon, desktop header, welcome screen, and README"
 
 [[collection]]
 source = "https://github.com/tabler/tabler-icons"

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/hexaris.svg" width="96" height="96" alt="Hexaris logo">
+  <img src="assets/branding/starry-night.png" width="96" height="96" alt="Hexaris artwork showing a golden star reflected in a lake">
 </p>
 
 <h1 align="center">Hexaris</h1>
@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Prestondevs/hexaris/releases/latest"><strong>Download for Windows x64</strong></a> ·
+  <a href="#run-on-windows">Run on Windows</a> ·
   <a href="#features">Features</a> ·
   <a href="#command-line">Command line</a> ·
   <a href="#build-from-source">Build from source</a> ·
@@ -64,11 +65,25 @@ Screenshots show Hexaris analyzing its own CLI and the [score fixture](tests/fix
 | Export a patch | Verify the original bytes at a file offset and write a separate copy with a fixed-length replacement. |
 | Change the appearance | Preview and switch among Graphite, Slate, Ash Light, Foundry, and High Contrast in **Themes**. The selected palette is saved locally. |
 
-## Downloads
+## Run on Windows
 
-Download the Windows x64 ZIP, extract it, and run `hexaris.exe`. The archive includes `hexaris-cli.exe`, documentation, and license notices. The release page also provides a SHA-256 checksum. [GitHub Releases](https://github.com/Prestondevs/hexaris/releases/latest)
+1. Open the [latest GitHub release](https://github.com/Prestondevs/hexaris/releases/latest). Under **Assets**, download the file ending in `-windows-x64.zip`.
+2. Right-click the downloaded ZIP, choose **Extract All**, and open the extracted folder.
+3. Double-click **`hexaris.exe`**. Click **Choose file…** or drag an executable into the window to start analyzing it.
 
-Use **Open**, drag in a file, or pass a path to the desktop executable. Use **File → Open raw image** for unstructured bytes. Press **Ctrl+D** to toggle a bookmark and **Ctrl+S** to save the current project.
+You can also open PowerShell in the extracted folder and launch the app there. Pass a file path to open it immediately, or run the included CLI for terminal workflows.
+
+```powershell
+.\hexaris.exe
+.\hexaris.exe "C:\path\to\sample.exe"
+.\hexaris-cli.exe --help
+```
+
+Use **File → Open raw image** for unstructured bytes. Press **Ctrl+D** to toggle a bookmark and **Ctrl+S** to save the current project. The release also provides a `.sha256` file for checking the ZIP download.
+
+<p align="center">
+  <img src="docs/images/welcome.png" width="720" alt="Hexaris welcome screen with a painting of a golden star reflected in a lake above the file picker">
+</p>
 
 Windows x64 is the validated release platform. The source also targets Linux and macOS. See the [feature matrix](docs/FEATURE_MATRIX.md) for tested coverage, including the current limits of decompilation and architecture support.
 

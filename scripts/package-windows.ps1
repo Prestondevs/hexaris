@@ -45,7 +45,7 @@ try {
                 foreach ($name in 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'CONTRIBUTING.md', 'SECURITY.md', 'assets/ASSET_MANIFEST.toml') {
                     Add-ZipFile (Join-Path $repo $name) $name
                 }
-                foreach ($directory in 'assets/LICENSES', 'docs', 'tests/fixtures', 'scripts') {
+                foreach ($directory in 'assets/branding', 'assets/icons', 'assets/LICENSES', 'docs', 'tests/fixtures', 'scripts') {
                     foreach ($item in Get-ChildItem -LiteralPath (Join-Path $repo $directory) -File -Recurse | Sort-Object FullName) {
                         $name = [IO.Path]::GetRelativePath($repo, $item.FullName).Replace('\', '/')
                         Add-ZipFile $item.FullName $name
