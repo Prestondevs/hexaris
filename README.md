@@ -35,12 +35,12 @@
     <td width="50%" valign="top">
       <a href="docs/images/control-flow.png"><img src="docs/images/control-flow.png" width="100%" alt="A control-flow graph showing the two branches of the score fixture and their common return block"></a>
       <h3>Follow control flow</h3>
-      Explore x86 and x86-64 functions in disassembly or as basic blocks. Select a block to open its first instruction in the listing.
+      Fit the selected function’s full control-flow graph, pan and zoom, or focus on a block. Follow color-coded instructions in Disassembly and Linear.
     </td>
     <td width="50%" valign="top">
       <a href="docs/images/pseudo-c.png"><img src="docs/images/pseudo-c.png" width="100%" alt="Hexaris displaying C-like pseudocode for an unsigned conditional and two arithmetic return paths"></a>
       <h3>Read lifted code</h3>
-      Inspect 32-bit register SSA and incoming values at block boundaries. Open Pseudo-C to see recovered expressions and conditionals for supported Windows x64 leaf functions.
+      Inspect 32-bit register SSA and incoming values at block boundaries. Pseudo-C shows structured expressions where supported and a register-level listing with branches, loops, and calls for other decoded functions.
     </td>
   </tr>
   <tr>
@@ -67,7 +67,7 @@ The [user guide](docs/USER_GUIDE.md) walks through the desktop views, CLI comman
 | Search and navigate | Look for wildcard byte patterns or printable ASCII strings. Open multiple binaries and keep separate selections, views, and history in each tab. |
 | Save an investigation | Add comments, rename functions, and save bookmarks. A `.hxproj` embeds the binary and its annotations. [Project format](docs/PROJECT_FORMAT.md) |
 | Move annotations between tools | Merge function names, comments, and bookmarks from Ghidra program XML. Existing Hexaris annotations keep their values. [Import guide](docs/GHIDRA_XML.md) |
-| Export a patch | Verify the original bytes at a file offset and write a separate copy with a fixed-length replacement. |
+| Export a patch | Invert a supported x86 conditional branch or queue fixed-length byte edits, preview each change, and open the patched copy for reanalysis. |
 | Change the appearance | Preview and switch among Graphite, Slate, Ash Light, Foundry, and High Contrast in **Themes**. The selected palette is saved locally. |
 
 ## Run on Windows

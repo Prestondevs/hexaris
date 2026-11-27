@@ -34,7 +34,7 @@ fn export_preserves_full_addresses_and_explains_paging_and_unsupported_pseudocod
     assert!(
         page.notices
             .iter()
-            .any(|notice| notice.contains("Windows x64"))
+            .any(|notice| notice.contains("x86-64 ABI"))
     );
     assert!(
         page.markdown()

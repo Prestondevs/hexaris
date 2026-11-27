@@ -7,50 +7,65 @@ use std::{
 use iced_x86::{ConditionCode, Mnemonic, OpKind, Register};
 use serde::Serialize;
 
-use crate::{Architecture, EdgeKind, Function, Image, Instruction};
+use crate::{
+    Architecture, ControlFlowCode, EdgeKind, Function, Image, Instruction, decompile_listing,
+};
 
 const MAX_BLOCK_VISITS: usize = 64;
 const MAX_EXPRESSION_SIZE: usize = 64;
 const WINDOWS_ARGUMENTS: [Register; 4] =
     [Register::ECX, Register::EDX, Register::R8D, Register::R9D];
+const SYSV_ARGUMENTS: [Register; 6] = [
+    Register::EDI,
+    Register::ESI,
+    Register::EDX,
+    Register::ECX,
+    Register::R8D,
+    Register::R9D,
+];
 
 #[derive(Debug, Serialize)]
 pub struct Decompilation {
     pub address: u64,
     pub code: Option<String>,
     pub unavailable: Option<String>,
+    pub control_flow: Option<ControlFlowCode>,
 }
 
-/// Recover a C-like 32-bit result from a supported Windows x64 leaf function.
+/// Recover a structured leaf-function result and a register-level control-flow listing.
 pub fn decompile(image: &Image, function: &Function) -> Decompilation {
-    let result = if image.info.format == "PE" && image.info.architecture == Architecture::X86_64 {
-        windows_x64(function)
-    } else {
-        Err("Structured pseudocode currently requires a Windows x64 image".into())
+    let result = match (image.info.architecture, image.info.format) {
+        (Architecture::X86_64, "PE") => structured(function, true),
+        (Architecture::X86_64, "ELF" | "Mach-O") => structured(function, false),
+        _ => Err("Structured pseudocode requires a Windows or System V x86-64 ABI".into()),
     };
-    match result {
-        Ok(code) => Decompilation {
-            address: function.address,
-            code: Some(code),
-            unavailable: None,
-        },
-        Err(reason) => Decompilation {
-            address: function.address,
-            code: None,
-            unavailable: Some(reason),
-        },
+    let (code, unavailable) = match result {
+        Ok(code) => (Some(code), None),
+        Err(reason) => (None, Some(reason)),
+    };
+    Decompilation {
+        address: function.address,
+        code,
+        unavailable,
+        control_flow: decompile_listing::render(function),
     }
 }
 
-fn windows_x64(function: &Function) -> Result<String, String> {
+fn structured(function: &Function, windows: bool) -> Result<String, String> {
     if !function.issues.is_empty()
         || function.instructions.len() > 128
         || function.blocks.len() > 32
     {
         return Err("Structured pseudocode needs a small, fully decoded function".into());
     }
+    let arguments: &[Register] = if windows {
+        &WINDOWS_ARGUMENTS
+    } else {
+        &SYSV_ARGUMENTS
+    };
     let state = State {
-        registers: WINDOWS_ARGUMENTS
+        windows,
+        registers: arguments
             .iter()
             .enumerate()
             .map(|(index, &register)| (register, Value::argument(index)))
@@ -142,6 +157,7 @@ enum Statement {
         left: Value,
         operator: &'static str,
         right: Value,
+        signed: bool,
         taken: Box<Self>,
         fallthrough: Box<Self>,
     },
@@ -158,10 +174,15 @@ impl Statement {
                 left,
                 operator,
                 right,
+                signed,
                 taken,
                 fallthrough,
             } => {
-                let _ = writeln!(output, "{indent}if ({left} {operator} {right}) {{");
+                let cast = if *signed { "(int32_t)" } else { "" };
+                let _ = writeln!(
+                    output,
+                    "{indent}if ({cast}{left} {operator} {cast}{right}) {{"
+                );
                 taken.write(output, level + 1);
                 let _ = writeln!(output, "{indent}}} else {{");
                 fallthrough.write(output, level + 1);
@@ -173,16 +194,24 @@ impl Statement {
 
 #[derive(Clone, Default)]
 struct State {
+    windows: bool,
     registers: BTreeMap<Register, Value>,
     stack_slots: BTreeMap<u64, Value>,
-    comparison: Option<(Value, Value)>,
+    comparison: Option<Comparison>,
+}
+
+#[derive(Clone)]
+struct Comparison {
+    left: Value,
+    right: Value,
+    from_test: bool,
 }
 
 impl State {
     fn operand(&self, decoded: &iced_x86::Instruction, index: u32) -> Option<Value> {
         match decoded.op_kind(index) {
             OpKind::Register => self.registers.get(&decoded.op_register(index)).cloned(),
-            OpKind::Memory => self.stack_slots.get(&home_slot(decoded)?).cloned(),
+            OpKind::Memory if self.windows => self.stack_slots.get(&home_slot(decoded)?).cloned(),
             OpKind::Immediate32 | OpKind::Immediate8to32 => {
                 Some(Value::constant(decoded.immediate(index) as u32))
             }
@@ -200,22 +229,36 @@ impl State {
         }
         let destination = decoded.op0_register();
         match mnemonic {
-            Mnemonic::Cmp => {
-                self.comparison = Some((self.operand(decoded, 0)?, self.operand(decoded, 1)?));
+            Mnemonic::Cmp | Mnemonic::Test => {
+                let left = self.operand(decoded, 0)?;
+                let right = self.operand(decoded, 1)?;
+                let from_test = mnemonic == Mnemonic::Test;
+                let (left, right) = if from_test {
+                    (Value::binary("&", left, right)?, Value::constant(0))
+                } else {
+                    (left, right)
+                };
+                self.comparison = Some(Comparison {
+                    left,
+                    right,
+                    from_test,
+                });
             }
             Mnemonic::Mov => {
                 let value = self.operand(decoded, 1)?;
                 match decoded.op0_kind() {
-                    OpKind::Register if is_writable(destination) => {
+                    OpKind::Register if is_writable(destination, self.windows) => {
                         self.registers.insert(destination, value);
                     }
-                    OpKind::Memory => {
+                    OpKind::Memory if self.windows => {
                         self.stack_slots.insert(home_slot(decoded)?, value);
                     }
                     _ => return None,
                 }
             }
-            _ if decoded.op0_kind() == OpKind::Register && is_writable(destination) => {
+            _ if decoded.op0_kind() == OpKind::Register
+                && is_writable(destination, self.windows) =>
+            {
                 let value = if mnemonic == Mnemonic::Xor
                     && decoded.op1_kind() == OpKind::Register
                     && decoded.op1_register() == destination
@@ -228,8 +271,18 @@ impl State {
                         Mnemonic::And => ("&", self.operand(decoded, 1)?),
                         Mnemonic::Or => ("|", self.operand(decoded, 1)?),
                         Mnemonic::Xor => ("^", self.operand(decoded, 1)?),
-                        Mnemonic::Shl if decoded.op1_kind() == OpKind::Immediate8 => {
-                            ("<<", Value::constant(u32::from(decoded.immediate8() & 31)))
+                        Mnemonic::Shl | Mnemonic::Shr
+                            if decoded.op1_kind() == OpKind::Immediate8 =>
+                        {
+                            let operator = if mnemonic == Mnemonic::Shl {
+                                "<<"
+                            } else {
+                                ">>"
+                            };
+                            (
+                                operator,
+                                Value::constant(u32::from(decoded.immediate8() & 31)),
+                            )
                         }
                         _ => return None,
                     };
@@ -244,8 +297,8 @@ impl State {
     }
 }
 
-fn is_writable(register: Register) -> bool {
-    // Volatile Windows x64 integer registers. Avoid hiding callee-saved changes.
+fn is_writable(register: Register, windows: bool) -> bool {
+    // Avoid hiding changes to callee-saved registers.
     matches!(
         register,
         Register::EAX
@@ -255,7 +308,7 @@ fn is_writable(register: Register) -> bool {
             | Register::R9D
             | Register::R10D
             | Register::R11D
-    )
+    ) || (!windows && matches!(register, Register::EDI | Register::ESI))
 }
 
 fn home_slot(decoded: &iced_x86::Instruction) -> Option<u64> {
@@ -315,16 +368,27 @@ impl Traversal<'_> {
             return Ok(Statement::Return(value.clone()));
         }
         if last.decoded.is_jcc_short_or_near() {
-            let operator = match last.decoded.condition_code() {
-                ConditionCode::b => "<",
-                ConditionCode::be => "<=",
-                ConditionCode::ae => ">=",
-                ConditionCode::a => ">",
-                ConditionCode::e => "==",
-                ConditionCode::ne => "!=",
+            let (operator, signed) = match last.decoded.condition_code() {
+                ConditionCode::b => ("<", false),
+                ConditionCode::be => ("<=", false),
+                ConditionCode::ae => (">=", false),
+                ConditionCode::a => (">", false),
+                ConditionCode::e => ("==", false),
+                ConditionCode::ne => ("!=", false),
+                ConditionCode::l => ("<", true),
+                ConditionCode::le => ("<=", true),
+                ConditionCode::ge => (">=", true),
+                ConditionCode::g => (">", true),
                 _ => return Err(unsupported(last)),
             };
-            let (left, right) = state.comparison.clone().ok_or_else(|| unsupported(last))?;
+            let Comparison {
+                left,
+                right,
+                from_test,
+            } = state.comparison.clone().ok_or_else(|| unsupported(last))?;
+            if from_test && !signed && matches!(operator, "<" | "<=" | ">=" | ">") {
+                return Err(unsupported(last));
+            }
             left.visit_arguments(&mut self.arguments);
             right.visit_arguments(&mut self.arguments);
             let target = |kind| {
@@ -339,6 +403,7 @@ impl Traversal<'_> {
                 left,
                 operator,
                 right,
+                signed,
                 taken: Box::new(self.block(target(EdgeKind::Taken)?, state.clone())?),
                 fallthrough: Box::new(self.block(target(EdgeKind::Fallthrough)?, state)?),
             });
@@ -384,7 +449,7 @@ mod tests {
         )
         .unwrap();
         let function = analyze_function(&image, 0x1000).unwrap();
-        let code = windows_x64(&function).unwrap();
+        let code = structured(&function, true).unwrap();
         assert_eq!(
             code,
             "uint32_t sub_1000(uint32_t arg1) {\n    if (arg1 < 10u) {\n        return (arg1 << 1u);\n    } else {\n        return (arg1 + 3u);\n    }\n}"
@@ -404,12 +469,30 @@ mod tests {
             .unwrap()
         };
         let looped = analyze_function(&raw(vec![0xeb, 0xfe]), 0).unwrap();
-        assert!(windows_x64(&looped).unwrap_err().contains("loop"));
+        assert!(structured(&looped, true).unwrap_err().contains("loop"));
         let out_of_scope = analyze_function(&raw(vec![0x8b, 0x01, 0xc3]), 0).unwrap();
         assert!(
-            windows_x64(&out_of_scope)
+            structured(&out_of_scope, true)
                 .unwrap_err()
                 .contains("Unsupported effect")
         );
+    }
+
+    #[test]
+    fn recovers_a_signed_system_v_test() {
+        // mov eax,edi; test edi,edi; jl negative; shr eax,1; negative: ret
+        let image = Image::from_bytes(
+            vec![0x89, 0xf8, 0x85, 0xff, 0x7c, 2, 0xd1, 0xe8, 0xc3],
+            LoadMode::Raw {
+                architecture: Architecture::X86_64,
+                base: 0,
+            },
+        )
+        .unwrap();
+        let function = analyze_function(&image, 0).unwrap();
+        let code = structured(&function, false).unwrap();
+        assert!(code.contains("uint32_t arg1"));
+        assert!(code.contains("(int32_t)(arg1 & arg1) < (int32_t)0u"));
+        assert!(code.contains("return (arg1 >> 1u);"));
     }
 }

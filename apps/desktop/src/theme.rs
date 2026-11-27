@@ -25,6 +25,8 @@ pub struct Palette {
     pub muted: Color32,
     pub accent: Color32,
     pub warn: Color32,
+    pub register: Color32,
+    pub number: Color32,
     hover: Color32,
     selection: Color32,
 }
@@ -80,6 +82,8 @@ impl Theme {
                 muted: rgb(0xAAB0B9),
                 accent: rgb(0xA8C9F0),
                 warn: rgb(0xEDC088),
+                register: rgb(0xA6DEBD),
+                number: rgb(0xDFC6F4),
                 hover: rgb(0x393F47),
                 selection: rgb(0x38495E),
             },
@@ -92,6 +96,8 @@ impl Theme {
                 muted: rgb(0xAFBCD0),
                 accent: rgb(0xABC8FF),
                 warn: rgb(0xF4C98D),
+                register: rgb(0xA4DFCA),
+                number: rgb(0xE4CBFF),
                 hover: rgb(0x36455A),
                 selection: rgb(0x354D71),
             },
@@ -104,6 +110,8 @@ impl Theme {
                 muted: rgb(0x525D6A),
                 accent: rgb(0x215997),
                 warn: rgb(0x8A4D12),
+                register: rgb(0x185743),
+                number: rgb(0x553779),
                 hover: rgb(0xDEE5EE),
                 selection: rgb(0xC5D9F1),
             },
@@ -116,6 +124,8 @@ impl Theme {
                 muted: rgb(0xBCB0A5),
                 accent: rgb(0xF1BC94),
                 warn: rgb(0xF4D08D),
+                register: rgb(0xBAD8A7),
+                number: rgb(0xD7C4F3),
                 hover: rgb(0x403932),
                 selection: rgb(0x533D32),
             },
@@ -128,6 +138,8 @@ impl Theme {
                 muted: rgb(0xD1D1D1),
                 accent: rgb(0xBBD9FF),
                 warn: rgb(0xFFDD91),
+                register: rgb(0xA6F7BC),
+                number: rgb(0xE8C1FF),
                 hover: rgb(0x383838),
                 selection: rgb(0x274768),
             },
@@ -288,6 +300,15 @@ mod tests {
                     "{} panel text",
                     theme.name()
                 );
+            }
+            for ink in [palette.register, palette.number] {
+                for surface in [palette.panel, palette.hover, palette.selection] {
+                    assert!(
+                        contrast(ink, surface) >= 4.5,
+                        "{} syntax text",
+                        theme.name()
+                    );
+                }
             }
         }
     }

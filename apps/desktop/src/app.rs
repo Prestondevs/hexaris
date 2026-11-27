@@ -15,6 +15,8 @@ use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, Messag
 
 use crate::theme::{self, Theme};
 
+mod editing;
+mod flow;
 mod tools;
 mod views;
 
@@ -74,16 +76,14 @@ struct Session {
     dirty: bool,
     lifted: BTreeMap<u64, LiftedFunction>,
     pseudocode: BTreeMap<u64, Decompilation>,
-}
-
-#[derive(Default)]
-struct PatchDialog {
-    offset: String,
-    expected: String,
-    replacement: String,
+    patches: Vec<BytePatch>,
 }
 
 impl Session {
+    fn has_unsaved_work(&self) -> bool {
+        self.dirty || !self.patches.is_empty()
+    }
+
     fn function_name<'a>(&'a self, function: &'a Function) -> &'a str {
         self.project
             .function_name(function.address)
@@ -108,6 +108,7 @@ struct ViewState {
     disassembly_jump: Option<usize>,
     linear: Option<LinearListing>,
     jump_text: String,
+    hex_offset: String,
     note: String,
     name: String,
     bookmark: String,
@@ -118,6 +119,8 @@ struct ViewState {
     querying: Option<Receiver<QueryResult>>,
     navigation_back: Vec<(u64, u64)>,
     navigation_forward: Vec<(u64, u64)>,
+    flow: flow::GraphState,
+    pseudo_control_flow: bool,
 }
 
 struct BackgroundTab {
@@ -137,7 +140,7 @@ pub struct App {
     message: Option<(bool, String)>,
     show_inspector: bool,
     show_raw: bool,
-    patch_dialog: Option<PatchDialog>,
+    patch_dialog: Option<editing::PatchDialog>,
     tools_dialog: Option<tools::ToolsDialog>,
     raw_base: String,
     raw_arch: Architecture,
@@ -358,7 +361,7 @@ impl App {
             self.background.get(&id).map(|tab| &tab.session)
         };
         let Some(session) = session else { return };
-        if session.dirty
+        if session.has_unsaved_work()
             && !Self::confirm_discard(&format!(
                 "Discard unsaved changes to {}?",
                 session.project.name()
@@ -392,7 +395,7 @@ impl App {
             .session
             .iter()
             .chain(self.background.values().map(|tab| &tab.session))
-            .filter(|session| session.dirty)
+            .filter(|session| session.has_unsaved_work())
             .count();
         dirty == 0
             || Self::confirm_discard(&format!(
@@ -590,6 +593,7 @@ impl App {
             Ok(function) => {
                 session.analysis.functions.insert(address, function);
                 session.references = ReferenceIndex::build(&session.analysis);
+                self.state.flow = flow::GraphState::default();
                 session.lifted.remove(&address);
                 session.pseudocode.remove(&address);
                 self.navigate(address, address);
@@ -693,17 +697,11 @@ impl App {
                         if ui
                             .add_enabled(
                                 self.session.is_some() && self.opening.is_none(),
-                                Button::new("Export byte patch…"),
+                                Button::new("Patch bytes…"),
                             )
                             .clicked()
                         {
-                            let offset = self.state.selected_file_offset;
-                            self.patch_dialog = Some(PatchDialog {
-                                offset: offset
-                                    .map(|offset| format!("0x{offset:X}"))
-                                    .unwrap_or_default(),
-                                ..Default::default()
-                            });
+                            self.open_patch(self.state.selected_file_offset);
                             ui.close();
                         }
                     });
@@ -716,6 +714,16 @@ impl App {
                         .clicked()
                     {
                         self.save(false);
+                    }
+                    if let Some(session) = &self.session {
+                        let title = if session.patches.is_empty() {
+                            "Patch bytes…".into()
+                        } else {
+                            format!("Patches ({})", session.patches.len())
+                        };
+                        if ui.button(title).clicked() {
+                            self.open_patch(self.state.selected_file_offset);
+                        }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.menu_button("Themes", |ui| {
@@ -851,7 +859,7 @@ impl App {
                                     if display.len() < name.len() {
                                         display.push('…');
                                     }
-                                    if session.dirty {
+                                    if session.has_unsaved_work() {
                                         display.push_str(" •");
                                     }
                                     let tab = Button::selectable(id == self.version, display);
@@ -916,86 +924,6 @@ impl App {
         self.show_raw = visible && mode.is_none();
         if let Some(mode) = mode {
             self.choose(ctx, mode);
-        }
-    }
-
-    fn patch_window(&mut self, ctx: &Context) {
-        let Some(dialog) = &mut self.patch_dialog else {
-            return;
-        };
-        let mut open = true;
-        let mut write = false;
-        egui::Window::new("Export byte patch")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                label(
-                    ui,
-                    "Write a new binary with a fixed-length byte replacement.",
-                );
-                egui::Grid::new("byte-patch-fields")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        ui.label("File offset");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut dialog.offset)
-                                .font(egui::TextStyle::Monospace),
-                        );
-                        ui.end_row();
-                        ui.label("Expected bytes");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut dialog.expected)
-                                .font(egui::TextStyle::Monospace)
-                                .hint_text("48 8B"),
-                        );
-                        ui.end_row();
-                        ui.label("Replacement bytes");
-                        ui.add(
-                            egui::TextEdit::singleline(&mut dialog.replacement)
-                                .font(egui::TextStyle::Monospace),
-                        );
-                        ui.end_row();
-                    });
-                write = ui
-                    .add_enabled(self.opening.is_none(), Button::new("Export copy…"))
-                    .clicked();
-            });
-        if !open {
-            self.patch_dialog = None;
-        }
-        if write && let Some(dialog) = &self.patch_dialog {
-            let offset = match parse_address(&dialog.offset)
-                .ok()
-                .and_then(|value| usize::try_from(value).ok())
-            {
-                Some(offset) => offset,
-                None => {
-                    self.error("Enter a valid file offset.");
-                    return;
-                }
-            };
-            match BytePatch::parse(offset, &dialog.expected, &dialog.replacement) {
-                Ok(patch) => self.export_patch(patch),
-                Err(error) => self.error(error),
-            }
-        }
-    }
-
-    fn export_patch(&mut self, patch: BytePatch) {
-        let Some(session) = &self.session else { return };
-        let Some(path) = FileDialog::new()
-            .set_title("Export patched binary copy")
-            .save_file()
-        else {
-            return;
-        };
-        match patch.write_copy(session.project.image(), &path) {
-            Ok(()) => {
-                self.patch_dialog = None;
-                self.message = Some((false, format!("Exported {}", path.display())));
-            }
-            Err(error) => self.error(error),
         }
     }
 }
@@ -1175,6 +1103,7 @@ fn load(path: PathBuf, mode: LoadMode) -> hexaris_engine::Result<Session> {
         dirty: false,
         lifted: BTreeMap::new(),
         pseudocode: BTreeMap::new(),
+        patches: Vec::new(),
     })
 }
 

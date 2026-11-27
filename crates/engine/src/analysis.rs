@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use iced_x86::{Decoder, DecoderOptions, FlowControl, Formatter, IntelFormatter, OpKind};
+use iced_x86::{
+    Decoder, DecoderOptions, FlowControl, Formatter, FormatterOutput, FormatterTextKind,
+    IntelFormatter, OpKind,
+};
 use serde::Serialize;
 
 use crate::{Error, Image, Result};
@@ -33,6 +36,57 @@ pub struct Instruction {
     pub text: String,
     #[serde(skip)]
     pub(crate) decoded: iced_x86::Instruction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstructionToken {
+    Text,
+    Mnemonic,
+    ControlFlow,
+    Register,
+    Number,
+    Target,
+}
+
+impl Instruction {
+    /// Visit the Intel listing in display order with the formatter's token categories.
+    pub fn visit_tokens(&self, write: impl FnMut(&str, InstructionToken)) {
+        let control_flow = matches!(
+            self.decoded.flow_control(),
+            FlowControl::ConditionalBranch
+                | FlowControl::UnconditionalBranch
+                | FlowControl::IndirectBranch
+                | FlowControl::Call
+                | FlowControl::IndirectCall
+                | FlowControl::Return
+        );
+        let mut output = TokenOutput {
+            control_flow,
+            write,
+        };
+        intel_formatter().format(&self.decoded, &mut output);
+    }
+}
+
+struct TokenOutput<F> {
+    control_flow: bool,
+    write: F,
+}
+
+impl<F: FnMut(&str, InstructionToken)> FormatterOutput for TokenOutput<F> {
+    fn write(&mut self, text: &str, kind: FormatterTextKind) {
+        let token = match kind {
+            FormatterTextKind::Mnemonic if self.control_flow => InstructionToken::ControlFlow,
+            FormatterTextKind::Mnemonic | FormatterTextKind::Prefix => InstructionToken::Mnemonic,
+            FormatterTextKind::Register => InstructionToken::Register,
+            FormatterTextKind::Number => InstructionToken::Number,
+            FormatterTextKind::LabelAddress
+            | FormatterTextKind::FunctionAddress
+            | FormatterTextKind::SelectorValue => InstructionToken::Target,
+            _ => InstructionToken::Text,
+        };
+        (self.write)(text, token);
+    }
 }
 
 #[derive(Debug, Serialize)]

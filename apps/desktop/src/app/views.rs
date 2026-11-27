@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::fmt::Write as _;
 
-use eframe::egui::{self, Align2, FontId, Grid, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use hexaris_engine::{CallSite, EdgeKind, Image, Reference, Region};
+use eframe::egui::{self, Align2, FontId, Grid, Rect, Sense, Stroke, pos2, vec2};
+use hexaris_engine::{CallSite, Image, Instruction, InstructionToken, Reference, Region};
 
 use super::*;
 
@@ -422,19 +422,17 @@ impl App {
             .auto_shrink([false; 2])
             .id_salt(("linear", self.version, listing.start))
             .show_rows(ui, ROW, listing.instructions.len(), |ui, range| {
+                ui.spacing_mut().interact_size.y = ROW;
+                ui.spacing_mut().button_padding.y = 2.0;
                 for instruction in &listing.instructions[range] {
-                    let text = format!(
-                        "{:016X}   {:26}  {}",
-                        instruction.address,
-                        hex_bytes(&instruction.bytes),
-                        instruction.text
-                    );
+                    let text = instruction_text(instruction, "", palette);
                     if ui
                         .add(
                             Button::selectable(
                                 self.state.selected_address == Some(instruction.address),
-                                RichText::new(text).monospace(),
+                                text,
                             )
+                            .wrap_mode(egui::TextWrapMode::Extend)
                             .min_size(vec2(ui.available_width(), ROW)),
                         )
                         .clicked()
@@ -491,6 +489,8 @@ impl App {
             });
         }
         let mut target = None;
+        let mut edit_offset = None;
+        let mut branch_patch = None;
         match self.state.view {
             View::Disassembly => {
                 let mut area = ScrollArea::both()
@@ -502,8 +502,9 @@ impl App {
                     );
                 }
                 area.show_rows(ui, ROW, function.instructions.len(), |ui, range| {
+                    ui.spacing_mut().interact_size.y = ROW;
+                    ui.spacing_mut().button_padding.y = 2.0;
                     for instruction in &function.instructions[range] {
-                        let bytes = hex_bytes(&instruction.bytes);
                         let comment = session
                             .project
                             .comment(instruction.address)
@@ -511,27 +512,31 @@ impl App {
                             .lines()
                             .next()
                             .unwrap_or_default();
-                        let text = format!(
-                            "{:016X}   {:26}  {}{}",
-                            instruction.address,
-                            bytes,
-                            instruction.text,
-                            if comment.is_empty() {
-                                String::new()
-                            } else {
-                                format!("    ; {comment}")
-                            }
-                        );
+                        let text = instruction_text(instruction, comment, palette);
                         let button = Button::selectable(
                             self.state.selected_address == Some(instruction.address),
-                            RichText::new(text).monospace(),
+                            text,
                         )
+                        .wrap_mode(egui::TextWrapMode::Extend)
                         .min_size(vec2(ui.available_width(), ROW));
                         let response = ui.add(button);
                         if response.clicked() {
                             target = Some(instruction.address);
                         }
                         response.context_menu(|ui| {
+                            if ui.button("Patch bytes here…").clicked() {
+                                edit_offset = Some(instruction.file_offset);
+                                ui.close();
+                            }
+                            if let Some(patch) = BytePatch::invert_branch(instruction)
+                                && ui.button("Invert branch…").clicked()
+                            {
+                                branch_patch = Some((patch, format!(
+                                    "Invert {} at 0x{:X}. The destination and byte length stay the same.",
+                                    instruction.text, instruction.address
+                                )));
+                                ui.close();
+                            }
                             if ui.button("Copy virtual address").clicked() {
                                 ui.ctx().copy_text(format!("0x{:X}", instruction.address));
                                 ui.close();
@@ -545,11 +550,21 @@ impl App {
                 });
             }
             View::Flow => {
-                if let Some(address) =
-                    graph(ui, self.version, function, self.state.selected_address)
-                {
-                    target = Some(address);
-                    self.state.view = View::Disassembly;
+                match flow::graph(
+                    ui,
+                    &mut self.state.flow,
+                    function,
+                    self.state.selected_address,
+                ) {
+                    Some(flow::GraphAction::Select(address)) => target = Some(address),
+                    Some(flow::GraphAction::Disassemble(address)) => {
+                        target = Some(address);
+                        self.state.view = View::Disassembly;
+                    }
+                    Some(flow::GraphAction::Invert(patch, description)) => {
+                        branch_patch = Some((patch, description))
+                    }
+                    None => {}
                 }
             }
             View::Registers => {
@@ -621,22 +636,86 @@ impl App {
                     });
             }
             View::Pseudocode => {
+                if session.pseudocode.len() >= 32
+                    && !session.pseudocode.contains_key(&function.address)
+                {
+                    session.pseudocode.clear();
+                }
                 let result = session
                     .pseudocode
                     .entry(function.address)
                     .or_insert_with(|| decompile(session.project.image(), function));
-                if let Some(code) = &result.code {
-                    label(
-                        ui,
-                        "Windows x64 leaf-function projection · unsigned 32-bit values",
-                    );
+                if result.code.is_some() && result.control_flow.is_some() {
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut self.state.pseudo_control_flow,
+                            false,
+                            "Structured",
+                        );
+                        ui.selectable_value(
+                            &mut self.state.pseudo_control_flow,
+                            true,
+                            "Control-flow",
+                        );
+                    });
+                }
+                let structured = result
+                    .code
+                    .as_ref()
+                    .filter(|_| !self.state.pseudo_control_flow || result.control_flow.is_none());
+                if let Some(code) = structured {
+                    ui.horizontal_wrapped(|ui| {
+                        label(
+                            ui,
+                            "Structured x86-64 leaf function · 32-bit integer values",
+                        );
+                        if ui.button("Copy pseudocode").clicked() {
+                            ui.ctx().copy_text(code.clone());
+                        }
+                    });
                     ScrollArea::both()
-                        .id_salt(("pseudocode", self.version, function.address))
+                        .id_salt(("structured", self.version, function.address))
                         .show(ui, |ui| {
-                            if ui.button("Copy pseudocode").clicked() {
-                                ui.ctx().copy_text(code.clone());
-                            }
                             ui.monospace(code);
+                        });
+                } else if let Some(listing) = &result.control_flow {
+                    ui.horizontal_wrapped(|ui| {
+                        label(ui, "Control-flow pseudocode · registers, labels, and calls");
+                        if ui.button("Copy pseudocode").clicked() {
+                            ui.ctx().copy_text(listing.text());
+                        }
+                    });
+                    if let Some(reason) = &result.unavailable {
+                        label(ui, &format!("Structured view unavailable · {reason}"));
+                    }
+                    let row_height = ui.spacing().interact_size.y.max(ROW);
+                    ScrollArea::both()
+                        .id_salt(("control_flow_code", self.version, function.address))
+                        .show_rows(ui, row_height, listing.lines.len(), |ui, rows| {
+                            for line in &listing.lines[rows] {
+                                let code = RichText::new(&line.text).monospace();
+                                if let Some(address) = line.address {
+                                    let current = self.state.selected_address == Some(address);
+                                    if ui
+                                        .add(
+                                            Button::selectable(current, code)
+                                                .wrap_mode(egui::TextWrapMode::Extend)
+                                                .min_size(vec2(ui.available_width(), row_height)),
+                                        )
+                                        .on_hover_text(format!("Select 0x{address:X}"))
+                                        .clicked()
+                                    {
+                                        target = Some(address);
+                                    }
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        ui.set_min_height(row_height);
+                                        ui.add(
+                                            egui::Label::new(code.color(palette.muted)).extend(),
+                                        );
+                                    });
+                                }
+                            }
                         });
                 } else if let Some(reason) = &result.unavailable {
                     ui.label(RichText::new(reason).color(palette.warn));
@@ -647,6 +726,11 @@ impl App {
         let function_address = function.address;
         if let Some(address) = target {
             self.navigate(function_address, address);
+        }
+        if let Some((patch, description)) = branch_patch {
+            self.open_branch_patch(patch, description);
+        } else if let Some(offset) = edit_offset {
+            self.open_patch(Some(offset));
         }
     }
 
@@ -792,14 +876,28 @@ impl App {
 
     fn hex(&mut self, ui: &mut Ui) {
         let palette = self.theme.palette();
-        let Some(image) = self.session.as_ref().map(|session| session.project.image()) else {
+        let Some(session) = &self.session else {
             return;
         };
-        ui.heading("File bytes");
-        ui.label(
-            RichText::new("File offset    00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F   ASCII")
-                .monospace()
-                .color(palette.muted),
+        let image = session.project.image();
+        let mut edit = None;
+        let mut jump = false;
+        ui.horizontal_wrapped(|ui| {
+            ui.heading("File bytes");
+            let response = ui.add(
+                egui::TextEdit::singleline(&mut self.state.hex_offset)
+                    .desired_width(100.0)
+                    .hint_text("File offset"),
+            );
+            jump = ui.button("Go to offset").clicked()
+                || (response.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)));
+            if ui.button("Patch selected byte…").clicked() {
+                edit = Some(self.state.selected_file_offset.unwrap_or_default());
+            }
+        });
+        label(
+            ui,
+            "Select a byte or right-click to patch at its exact file offset.",
         );
         let mut area = ScrollArea::both()
             .auto_shrink([false; 2])
@@ -812,10 +910,10 @@ impl App {
         let mut picked = None;
         let selected = self.state.selected_file_offset;
         area.show_rows(ui, ROW, image.bytes().len().div_ceil(16), |ui, rows| {
+            ui.spacing_mut().interact_size.y = ROW;
             for row in rows {
                 let offset = row * 16;
                 let bytes = &image.bytes()[offset..(offset + 16).min(image.bytes().len())];
-                let hex = hex_bytes(bytes);
                 let ascii: String = bytes
                     .iter()
                     .map(|&byte| {
@@ -826,22 +924,66 @@ impl App {
                         }
                     })
                     .collect();
-                let text =
-                    RichText::new(format!("{offset:08X}       {hex:47}   {ascii}")).monospace();
-                let highlighted = selected.is_some_and(|value| value / 16 == row);
-                if ui
-                    .add(
-                        Button::selectable(highlighted, text)
-                            .min_size(vec2(ui.available_width(), ROW)),
-                    )
-                    .clicked()
-                {
-                    picked = Some(offset);
-                }
+                ui.horizontal(|ui| {
+                    let spacing = ui.spacing_mut();
+                    spacing.item_spacing.x = 2.0;
+                    spacing.button_padding = vec2(3.0, 2.0);
+                    ui.add_sized(
+                        [84.0, ROW],
+                        egui::Label::new(
+                            RichText::new(format!("{offset:08X}"))
+                                .monospace()
+                                .color(palette.muted),
+                        ),
+                    );
+                    for column in 0..16 {
+                        if let Some(byte) = bytes.get(column) {
+                            let position = offset + column;
+                            let queued = session.patches.iter().any(|patch| {
+                                position >= patch.offset
+                                    && position - patch.offset < patch.expected().len()
+                            });
+                            let text = RichText::new(format!("{byte:02X}"))
+                                .monospace()
+                                .color(if queued { palette.warn } else { palette.text });
+                            let response = ui.add_sized(
+                                [24.0, ROW],
+                                Button::selectable(selected == Some(position), text),
+                            );
+                            if response.clicked() {
+                                picked = Some(position);
+                            }
+                            response.context_menu(|ui| {
+                                if ui.button(format!("Patch at 0x{position:X}…")).clicked() {
+                                    edit = Some(position);
+                                    ui.close();
+                                }
+                            });
+                        } else {
+                            ui.allocate_space(vec2(24.0, ROW));
+                        }
+                    }
+                    ui.add_space(10.0);
+                    ui.monospace(ascii);
+                });
             }
         });
+        let file_size = image.bytes().len();
         if let Some(offset) = picked {
             self.select_file_offset(offset);
+        }
+        if jump {
+            match parse_address(self.state.hex_offset.trim())
+                .ok()
+                .and_then(|value| usize::try_from(value).ok())
+            {
+                Some(offset) if offset < file_size => self.show_hex(offset),
+                _ => self.error("Enter a file offset inside this image."),
+            }
+        }
+        if let Some(offset) = edit {
+            self.select_file_offset(offset);
+            self.open_patch(Some(offset));
         }
     }
 
@@ -1038,132 +1180,6 @@ fn entropy_chart(ui: &mut Ui, triage: &ImageTriage) -> Option<usize> {
     selected
 }
 
-fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) -> Option<u64> {
-    let palette = theme::current(ui.ctx());
-    const LIMIT: usize = 200;
-    let visible = &function.blocks[..function.blocks.len().min(LIMIT)];
-    if function.blocks.len() > LIMIT {
-        label(ui, "Showing the first 200 blocks by address.");
-    }
-    if visible.is_empty() {
-        label(ui, "No blocks decoded.");
-        return None;
-    }
-    let columns = if visible.len() == 1 { 1 } else { 2 };
-    let stride = vec2(292.0, 132.0);
-    let positions: BTreeMap<_, _> = visible
-        .iter()
-        .enumerate()
-        .map(|(index, block)| {
-            (
-                block.address,
-                vec2(
-                    25.0 + (index % columns) as f32 * stride.x,
-                    17.0 + (index / columns) as f32 * stride.y,
-                ),
-            )
-        })
-        .collect();
-    let mut clicked = None;
-    ScrollArea::both()
-        .auto_shrink([false; 2])
-        .id_salt(("cfg", version, function.address))
-        .show(ui, |ui| {
-            let size = vec2(
-                stride.x * columns as f32 + 25.0,
-                stride.y * visible.len().div_ceil(columns) as f32 + 26.0,
-            );
-            let (canvas, painter) = ui.allocate_painter(size, Sense::hover());
-            let origin = canvas.rect.min;
-            let block_size = vec2(256.0, 91.0);
-            for block in visible {
-                let base = origin + positions[&block.address];
-                for edge in &block.successors {
-                    let Some(&target) = positions.get(&edge.target) else {
-                        continue;
-                    };
-                    let target = origin + target;
-                    let color = match edge.kind {
-                        EdgeKind::Fallthrough => palette.muted,
-                        EdgeKind::Taken => palette.accent,
-                        EdgeKind::Jump => palette.warn,
-                    };
-                    let stroke = Stroke::new(1.4_f32, color);
-                    let from = base + vec2(block_size.x * 0.5, block_size.y);
-                    let to = target + vec2(block_size.x * 0.5, 0.0);
-                    if to.y <= from.y {
-                        let x = if target.x <= base.x {
-                            target.x - 12.0
-                        } else {
-                            target.x + block_size.x + 12.0
-                        };
-                        let points = vec![
-                            from,
-                            from + vec2(0.0, 9.0),
-                            pos2(x, from.y + 9.0),
-                            pos2(x, to.y - 8.0),
-                            to - vec2(0.0, 8.0),
-                        ];
-                        painter.add(egui::Shape::line(points, stroke));
-                        painter.arrow(to - vec2(0.0, 8.0), vec2(0.0, 8.0), stroke);
-                    } else {
-                        painter.line_segment([from, to - vec2(0.0, 8.0)], stroke);
-                        painter.arrow(to - vec2(0.0, 8.0), vec2(0.0, 8.0), stroke);
-                    }
-                }
-            }
-            for block in visible {
-                let rect = Rect::from_min_size(origin + positions[&block.address], block_size);
-                let response =
-                    ui.interact(rect, ui.id().with(("block", block.address)), Sense::click());
-                if response.clicked() {
-                    clicked = Some(block.address);
-                }
-                let highlight = response.hovered() || selected == Some(block.address);
-                painter.rect(
-                    rect,
-                    4,
-                    palette.raised,
-                    Stroke::new(
-                        1.0_f32,
-                        if highlight {
-                            palette.accent
-                        } else {
-                            palette.border
-                        },
-                    ),
-                    StrokeKind::Inside,
-                );
-                let heading = format!(
-                    "0x{:X}   ·   {} instructions",
-                    block.address, block.instruction_count
-                );
-                painter.text(
-                    rect.min + vec2(10.0, 10.0),
-                    Align2::LEFT_TOP,
-                    heading,
-                    FontId::monospace(13.0),
-                    palette.accent,
-                );
-                for (index, instruction) in function.instructions[block.first_instruction..]
-                    .iter()
-                    .take(block.instruction_count.min(3))
-                    .enumerate()
-                {
-                    let text: String = instruction.text.chars().take(31).collect();
-                    painter.text(
-                        rect.min + vec2(10.0, 34.0 + index as f32 * 16.0),
-                        Align2::LEFT_TOP,
-                        text,
-                        FontId::monospace(12.0),
-                        palette.text,
-                    );
-                }
-            }
-        });
-    clicked
-}
-
 fn region_row(ui: &mut Ui, region: &Region) -> bool {
     let text = format!("{}   {} B", region.name, region.size);
     ui.add_enabled(region.file_offset.is_some(), Button::new(text).truncate())
@@ -1244,7 +1260,48 @@ fn result_rows(
     selected
 }
 
-fn hex_bytes(bytes: &[u8]) -> String {
+fn instruction_text(
+    instruction: &Instruction,
+    comment: &str,
+    palette: theme::Palette,
+) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::default();
+    let mut append = |text: &str, color| {
+        job.append(
+            text,
+            0.0,
+            egui::TextFormat {
+                font_id: FontId::monospace(13.0),
+                color,
+                ..Default::default()
+            },
+        );
+    };
+    append(
+        &format!(
+            "{:016X}   {:26}  ",
+            instruction.address,
+            hex_bytes(&instruction.bytes)
+        ),
+        palette.muted,
+    );
+    instruction.visit_tokens(|token, kind| {
+        let color = match kind {
+            InstructionToken::Text => palette.text,
+            InstructionToken::Mnemonic => palette.accent,
+            InstructionToken::ControlFlow | InstructionToken::Target => palette.warn,
+            InstructionToken::Register => palette.register,
+            InstructionToken::Number => palette.number,
+        };
+        append(token, color);
+    });
+    if !comment.is_empty() {
+        append(&format!("    ; {comment}"), palette.muted);
+    }
+    job
+}
+
+pub(super) fn hex_bytes(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(bytes.len() * 3);
     for (index, byte) in bytes.iter().enumerate() {
         if index != 0 {

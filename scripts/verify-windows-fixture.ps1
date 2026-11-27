@@ -66,7 +66,18 @@ int main(void) {
         $callOffset = $entry.instructions | Where-Object address -EQ $call.source | Select-Object -ExpandProperty file_offset
         & $tool patch score.exe patched.exe "$callOffset" --expect 'E8' --replace '90'
         if ((Get-FileHash -LiteralPath 'score.exe').Hash -ne $hash -or (Get-FileHash -LiteralPath 'patched.exe').Hash -eq $hash) { throw 'Patch copy validation failed' }
-        Write-Output 'Verified PE load, CFG, direct call, linear decode, project round trip, guarded patch, and 250,008 decompilation comparisons.'
+        $branch = $score.instructions | Where-Object { $_.text -like 'jb *' }
+        & $tool patch score.exe inverted.exe "$($branch.file_offset)" --expect '7209' --replace '7309'
+        $inverted = & $tool analyze inverted.exe | ConvertFrom-Json -AsHashtable
+        $recovered = $inverted.functions["$symbol"]
+        $invertedBranch = $recovered.instructions | Where-Object address -EQ $branch.address
+        $taken = $score.blocks[0].successors | Where-Object kind -EQ 'Taken'
+        $invertedTaken = $recovered.blocks[0].successors | Where-Object kind -EQ 'Taken'
+        if ($invertedBranch.text -notlike 'jae *' -or $taken.target -ne $invertedTaken.target -or
+            (Get-FileHash -LiteralPath 'score.exe').Hash -ne $hash) {
+            throw 'Conditional branch inversion or reanalysis failed'
+        }
+        Write-Output 'Verified PE load, CFG, direct call, linear decode, project round trip, guarded patch and branch inversion, and 250,008 decompilation comparisons.'
     } finally {
         Pop-Location
     }

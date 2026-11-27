@@ -4,8 +4,9 @@ use std::{
 };
 
 use hexaris_engine::{
-    Architecture, BytePatch, BytePattern, EdgeKind, Image, LoadMode, Project, ReferenceKind,
-    analyze, analyze_function, disassemble, lift, scan_strings,
+    Architecture, BytePatch, BytePattern, EdgeKind, Image, InstructionToken, LoadMode, Project,
+    ReferenceKind, analyze, analyze_function, decompile, disassemble, lift, scan_strings,
+    write_patched_copy,
 };
 
 fn raw(bytes: &[u8], base: u64) -> Image {
@@ -39,6 +40,93 @@ fn guarded_byte_patch_creates_only_a_new_file() {
     assert_eq!(fs::read(&output).unwrap(), [0x90, 0xCC, 0xC3]);
     assert_eq!(image.bytes(), [0x90, 0x90, 0xC3]);
     assert!(patch.write_copy(&image, &output).is_err());
+}
+
+#[test]
+fn queued_edits_invert_short_and_near_branches_without_moving_targets() {
+    // JNE short and JL near both branch to the RET at 0x1008.
+    let bytes = [0x75, 6, 0x0f, 0x8c, 0, 0, 0, 0, 0xc3];
+    let image = raw(&bytes, 0x1000);
+    let listing = disassemble(&image, 0x1000, 3).unwrap();
+    let mut tokens = Vec::new();
+    listing.instructions[0].visit_tokens(|text, kind| tokens.push((text.to_owned(), kind)));
+    assert!(
+        tokens
+            .iter()
+            .any(|(text, kind)| text == "jne" && *kind == InstructionToken::ControlFlow)
+    );
+    assert!(
+        tokens
+            .iter()
+            .any(|(_, kind)| *kind == InstructionToken::Target)
+    );
+    assert_eq!(
+        tokens
+            .iter()
+            .map(|(text, _)| text.as_str())
+            .collect::<String>(),
+        listing.instructions[0].text
+    );
+    let short = BytePatch::invert_branch(&listing.instructions[0]).unwrap();
+    let near = BytePatch::invert_branch(&listing.instructions[1]).unwrap();
+    assert_eq!(short.replacement(), [0x74, 6]);
+    assert_eq!(near.replacement(), [0x0f, 0x8d, 0, 0, 0, 0]);
+    assert!(BytePatch::invert_branch(&listing.instructions[2]).is_none());
+    assert!(!short.overlaps(&near));
+
+    let dir = tempfile::tempdir().unwrap();
+    let output = dir.path().join("patched.bin");
+    let overlap = BytePatch::for_replacement(&image, 1, "C3 CC").unwrap();
+    assert!(short.overlaps(&overlap));
+    assert!(write_patched_copy(&image, &[short, overlap], &output).is_err());
+    assert!(!output.exists());
+
+    let short = BytePatch::invert_branch(&listing.instructions[0]).unwrap();
+    write_patched_copy(&image, &[near, short], &output).unwrap();
+    let patched = raw(&fs::read(&output).unwrap(), 0x1000);
+    let patched = analyze_function(&patched, 0x1000).unwrap();
+    assert!(patched.instructions[0].text.starts_with("je "));
+    assert!(patched.instructions[1].text.starts_with("jge "));
+    assert!(
+        patched.blocks[0]
+            .successors
+            .iter()
+            .any(|edge| { edge.kind == EdgeKind::Taken && edge.target == 0x1008 })
+    );
+    assert!(
+        patched.blocks[1]
+            .successors
+            .iter()
+            .any(|edge| { edge.kind == EdgeKind::Taken && edge.target == 0x1008 })
+    );
+    assert_eq!(image.bytes(), bytes);
+}
+
+#[test]
+fn control_flow_pseudocode_retains_calls_and_backedges_when_structured_is_unavailable() {
+    // call 0x100b; test eax,eax; jne start; ret; pad; inc eax; ret
+    let image = raw(
+        &[
+            0xe8, 6, 0, 0, 0, 0x85, 0xc0, 0x75, 0xf7, 0xc3, 0x90, 0xff, 0xc0, 0xc3,
+        ],
+        0x1000,
+    );
+    let function = analyze_function(&image, 0x1000).unwrap();
+    let result = decompile(&image, &function);
+    assert!(result.code.is_none());
+    let listing = result.control_flow.unwrap();
+    assert!(!listing.truncated);
+    assert!(
+        listing
+            .lines
+            .iter()
+            .any(|line| { line.address == Some(0x1000) && line.text.contains("call(0x100B)") })
+    );
+    assert!(listing.lines.iter().any(|line| {
+        line.address == Some(0x1007)
+            && line.text.contains("goto loc_1000")
+            && line.text.contains("goto loc_1009")
+    }));
 }
 
 #[test]

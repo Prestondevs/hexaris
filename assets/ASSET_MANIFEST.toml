@@ -15,6 +15,12 @@ modifications = "Detail matching the Rijksmuseum collection preview, served at 1
 usage = "README banner only"
 
 [[collection]]
+source = "Hexaris Windows desktop on the authored score and workbench fixtures"
+license = "MIT"
+files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png"]
+usage = "README and user guide screenshots"
+
+[[collection]]
 source = "https://github.com/tabler/tabler-icons"
 version = "v3.34.1"
 license = "MIT"

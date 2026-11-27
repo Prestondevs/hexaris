@@ -49,7 +49,7 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 | Identify the format | Open **Overview** for architecture, endianness, entry point, image base, file size, and analysis notices. The loader reads PE, ELF, thin Mach-O, and COFF metadata and supports explicit raw x86 mappings. Code analysis requires supported, mapped x86 or x86-64 code. |
 | Browse metadata | Use **Regions**, **Symbols**, **Imports**, or **Exports** in the image browser. Click an address or file offset to navigate. Availability depends on the format and metadata in the image. |
 | Check a file digest | In **Overview**, use **Copy** beside SHA-256. Click the entropy chart to open the corresponding offset in **Hex**. The chart summarizes byte distribution across file ranges. |
-| Read bytes | Open **Hex** for the file offset, bytes, and ASCII representation of each row. Pick a row to select its start offset, or jump to a specific offset from the entropy chart or a search result. |
+| Read bytes | Open **Hex** for the file offset, bytes, and ASCII representation of each row. Click an exact byte or jump to a file offset using the offset field, the entropy chart, or a search result. |
 | Find byte patterns | Open **Byte search** or **Find bytes**. Enter a pattern such as `83 F8 ??`, where `??` matches one byte. Pick a result to open its offset. |
 | Find strings | Open **Strings**, set a minimum length, and run the scan. Select a printable ASCII result to see where it occurs in the file. |
 | Change the appearance | Open **Themes** and choose Graphite, Slate, Ash Light, Foundry, or High Contrast. The menu previews each palette and Hexaris remembers the choice. |
@@ -59,16 +59,18 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 ## Follow code and references
 
 1. Select an entry in **Functions** or type a virtual address and click **Go**. Addresses accept decimal or a `0x` hexadecimal prefix. **Analyze here** explicitly decodes a function at a mapped code address.
-2. Use **Disassembly** for the selected function or **Linear** to decode successive instructions from an address. Right-click a disassembly instruction to copy its address or text. **Back** and **Forward** revisit navigation history.
-3. Open **Control flow** to see basic blocks and labeled branches. Click a block to jump to its first instruction. In the score fixture, follow the comparison against 10 to the two return paths.
+2. Use **Disassembly** for the selected function or **Linear** to decode successive instructions from an address. Mnemonics, branches and targets, registers, constants, and address comments use theme colors. Right-click a disassembly instruction to copy its address or text. **Back** and **Forward** revisit navigation history.
+3. Open **Control flow** and click **Fit all blocks** to see every decoded block in the selected function. Drag to pan and scroll to zoom around the pointer. Click a block to select it, double-click it to focus, or use **Open disassembly** to jump to its first instruction. In the score fixture, follow the comparison against 10 to the two return paths.
 4. Open **Calls** to see indexed direct callers and callees. The **Inspector** gives incoming and outgoing references for the selected address. Click an address to follow it.
-5. Use **Register IR** to inspect projected 32-bit register values and incoming values at block boundaries. **Pseudo-C** shows the supported Windows x64 leaf-function projection and explains why a projection is unavailable when the engine cannot produce one.
+5. Use **Register IR** to inspect projected 32-bit register values and incoming values at block boundaries. **Pseudo-C** opens a structured view for supported x86-64 leaf functions. Switch to **Control-flow** to read the register-level listing with block labels, branches, and calls. Hexaris opens that listing automatically when it cannot produce structured output. Click a line to select its address in the Inspector.
 
 ![Control-flow blocks for the score fixture](images/control-flow.png)
 
 ![Direct callers, callees, and selectable call-site addresses](images/calls.png)
 
 ![Pseudo-C for the unsigned score branch](images/pseudo-c.png)
+
+![Control-flow Pseudo-C showing calls and a conditional branch in score_window](images/pseudo-c-control-flow.png)
 
 ## Keep an investigation
 
@@ -82,7 +84,13 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 
 ## Export a byte patch
 
-On a sample you own, select the target bytes in **Hex**. Choose **File → Export byte patch…**, enter the file offset and the exact original bytes, then enter a replacement of the same length. Save to a new output path. Hexaris checks the expected bytes before writing the copy. Open the copy separately to inspect the result.
+1. In **Hex**, select the first byte to edit and click **Patch selected byte…**. From **Disassembly**, right-click an instruction and choose **Patch bytes here…**. The **Patch bytes…** toolbar button also accepts a file offset directly.
+2. Enter replacement bytes, for example `90 90`. The number of bytes you enter sets the length of the edit. Compare the original and replacement, then click **Queue change**. Repeat for any additional offsets. You can remove a queued edit by clicking **Remove**.
+3. Click **Export and open patched copy…** and choose a new output path. Hexaris verifies the original bytes for every queued edit, writes a separate file, and opens it in another tab for reanalysis.
+
+To flip the score fixture’s branch, select the entry block at `0x140001000` in **Control flow** and click **Invert branch…**. Hexaris pre-fills the replacement `73 09` for the original `72 09`, changing `jb` to `jae` while preserving the destination. Queue the change and export the copy, then inspect the same address in the copy’s **Disassembly**. The action supports ordinary short and near x86 conditional jumps.
+
+![Branch inversion preview with original and replacement bytes in Patch bytes](images/patch-branch.png)
 
 ## Work with an assistant
 
@@ -186,7 +194,7 @@ Run `hexaris-cli <command> --help` for the complete arguments. These examples us
 | `disassemble` | `sample.exe 0x140001000 --count 16` | Sequential decode at a virtual address |
 | `analyze` | `sample.exe --address 0x140001000 --lift` | Function instructions, blocks, references, and optional register IR |
 | `references` | `sample.exe 0x140001000` | Indexed incoming and outgoing references and direct calls |
-| `decompile` | `sample.exe 0x140001000` | Supported Pseudo-C projection or the engine’s reason for withholding it |
+| `decompile` | `sample.exe 0x140001000` | Structured Pseudo-C when supported, a register-level control-flow listing for decoded code, and the reason when structured recovery is unavailable |
 | `hex` | `sample.exe --offset 0x400 --length 32` | Text hex dump at a file offset |
 | `strings` | `sample.exe --min-length 6 --limit 20` | Printable ASCII runs |
 | `find` | `sample.exe "48 8B ?? ??" --limit 20` | Byte-pattern hits with file offsets and mapped addresses |
