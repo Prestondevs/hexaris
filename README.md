@@ -15,6 +15,7 @@
 <p align="center">
   <a href="https://github.com/Prestondevs/hexaris/releases/latest"><strong>Download for Windows x64</strong></a> ·
   <a href="#run-on-windows">Run on Windows</a> ·
+  <a href="docs/USER_GUIDE.md">User guide</a> ·
   <a href="#features">Features</a> ·
   <a href="#command-line">Command line</a> ·
   <a href="#build-from-source">Build from source</a> ·
@@ -57,6 +58,8 @@
 </table>
 
 Screenshots show Hexaris analyzing its own CLI and the [score fixture](tests/fixtures/score.c) and [workbench fixture](tests/fixtures/workbench.c).
+
+The [user guide](docs/USER_GUIDE.md) walks through the desktop views, CLI commands, and current source workflows for assistant context, annotation review, local MCP, and build comparison.
 
 | Workflow | What Hexaris provides |
 | --- | --- |

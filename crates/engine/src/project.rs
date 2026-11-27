@@ -52,6 +52,15 @@ impl Project {
         &self.image
     }
 
+    pub fn sha256(&self) -> String {
+        use std::fmt::Write as _;
+        let mut checksum = String::with_capacity(64);
+        for byte in self.metadata.sha256 {
+            let _ = write!(checksum, "{byte:02x}");
+        }
+        checksum
+    }
+
     pub fn comment(&self, address: u64) -> Option<&str> {
         self.metadata.comments.get(&address).map(String::as_str)
     }

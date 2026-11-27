@@ -1389,6 +1389,7 @@ dependencies = [
  "hexaris-engine",
  "resvg",
  "rfd",
+ "serde_json",
  "tiny-skia",
  "usvg",
 ]

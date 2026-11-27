@@ -30,6 +30,7 @@ impl App {
         ui.separator();
         let mut target = None;
         let mut offset = None;
+        let mut context_target = None;
         match self.state.browser_tab {
             0 => {
                 ui.add(
@@ -71,9 +72,16 @@ impl App {
                             )
                             .truncate()
                             .min_size(vec2(ui.available_width(), ROW));
-                            if ui.add(button).clicked() {
+                            let response = ui.add(button);
+                            if response.clicked() {
                                 target = Some(function.address);
                             }
+                            response.context_menu(|ui| {
+                                if ui.button("Function context…").clicked() {
+                                    context_target = Some(function.address);
+                                    ui.close();
+                                }
+                            });
                         }
                     });
             }
@@ -183,6 +191,9 @@ impl App {
         }
         if let Some(offset) = offset {
             self.show_hex(offset);
+        }
+        if let Some(address) = context_target {
+            self.open_context(address);
         }
     }
 

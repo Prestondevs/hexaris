@@ -5,11 +5,13 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum, value_parser};
 use hexaris_engine::{
-    Architecture, BytePatch, BytePattern, Image, LoadMode, Project, ReferenceIndex, analyze,
-    analyze_function, decompile, disassemble, import_ghidra_xml, lift, parse_address, scan_strings,
-    triage,
+    Analysis, Architecture, BytePatch, BytePattern, FunctionContext, Image, LoadMode, Project,
+    ReferenceIndex, analyze, analyze_function, compare_builds, decompile, disassemble,
+    import_ghidra_xml, lift, parse_address, scan_strings, triage,
 };
 use serde_json::json;
+
+mod mcp;
 
 #[derive(Parser)]
 #[command(version, about = "Local binary inspection and static analysis")]
@@ -60,6 +62,31 @@ enum Command {
         #[arg(long, requires = "address")]
         lift: bool,
     },
+    /// Export evidence for one function in a bounded, versioned format.
+    Context {
+        #[command(flatten)]
+        input: Input,
+        #[arg(value_parser = parse_address)]
+        address: u64,
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        #[arg(long, default_value_t = 128)]
+        limit: usize,
+        #[arg(long, value_enum, default_value = "json")]
+        format: ReportFormat,
+    },
+    /// Compare the discovered functions in two related builds.
+    Compare {
+        before: PathBuf,
+        after: PathBuf,
+        #[arg(long, value_enum, default_value = "json")]
+        format: ReportFormat,
+    },
+    /// Serve read-only MCP tools over stdio for the specified binary or project.
+    Mcp {
+        #[command(flatten)]
+        input: Input,
+    },
     /// Print a range of file bytes.
     Hex {
         #[command(flatten)]
@@ -103,6 +130,12 @@ enum Command {
         #[command(subcommand)]
         action: ProjectAction,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum ReportFormat {
+    Json,
+    Markdown,
 }
 
 #[derive(Args)]
@@ -160,6 +193,14 @@ enum ProjectAction {
 }
 
 impl Input {
+    fn auto(path: PathBuf) -> Self {
+        Self {
+            path,
+            raw: None,
+            base: None,
+        }
+    }
+
     fn open(&self) -> hexaris_engine::Result<Project> {
         if self.raw.is_none() && is_project(&self.path) {
             return Project::open(&self.path);
@@ -185,6 +226,22 @@ impl Input {
     }
 }
 
+fn function_context(
+    project: &Project,
+    analysis: &Analysis,
+    index: &ReferenceIndex,
+    address: u64,
+    offset: usize,
+    limit: usize,
+) -> hexaris_engine::Result<FunctionContext> {
+    if let Some(function) = analysis.functions.get(&address) {
+        FunctionContext::build(project, function, index, &analysis.notices, offset, limit)
+    } else {
+        let function = analyze_function(project.image(), address)?;
+        FunctionContext::build(project, &function, index, &analysis.notices, offset, limit)
+    }
+}
+
 fn is_project(path: &Path) -> bool {
     path.extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("hxproj"))
@@ -206,11 +263,7 @@ fn execute(command: Command, output: &mut impl Write) -> Result<(), Box<dyn std:
             let mut failed = 0;
             let mut reports = Vec::with_capacity(paths.len());
             for path in paths {
-                let input = Input {
-                    path,
-                    raw: None,
-                    base: None,
-                };
+                let input = Input::auto(path);
                 let display = input.path.to_string_lossy();
                 match input.open() {
                     Ok(project) => {
@@ -282,6 +335,41 @@ fn execute(command: Command, output: &mut impl Write) -> Result<(), Box<dyn std:
                 write_json(output, &json!(analysis))?;
             }
         }
+        Command::Context {
+            input,
+            address,
+            offset,
+            limit,
+            format,
+        } => {
+            let project = input.open()?;
+            let analysis = analyze(project.image());
+            let index = ReferenceIndex::build(&analysis);
+            let context = function_context(&project, &analysis, &index, address, offset, limit)?;
+            match format {
+                ReportFormat::Json => write_json(output, &json!(context))?,
+                ReportFormat::Markdown => write!(output, "{}", context.markdown()?)?,
+            }
+        }
+        Command::Compare {
+            before,
+            after,
+            format,
+        } => {
+            let before = Input::auto(before).open()?;
+            let after = Input::auto(after).open()?;
+            let comparison = compare_builds(
+                &before,
+                &analyze(before.image()),
+                &after,
+                &analyze(after.image()),
+            )?;
+            match format {
+                ReportFormat::Json => write_json(output, &json!(comparison))?,
+                ReportFormat::Markdown => write!(output, "{}", comparison.markdown())?,
+            }
+        }
+        Command::Mcp { input } => mcp::serve(input.open()?, io::stdin().lock(), output)?,
         Command::Hex {
             input,
             offset,

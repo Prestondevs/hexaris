@@ -1,6 +1,8 @@
 //! Read-only loaders and static analysis for Hexaris.
 
 mod analysis;
+mod assistant;
+mod comparison;
 mod decompile;
 mod ghidra_xml;
 mod image;
@@ -15,6 +17,11 @@ pub use analysis::{
     Analysis, Block, Edge, EdgeKind, Function, Instruction, LinearListing, Reference,
     ReferenceKind, analyze, analyze_function, disassemble,
 };
+pub use assistant::{
+    AnnotationProposal, AssistantFinding, AssistantResponse, CONTEXT_LIMIT, ContextAddress,
+    FunctionContext, ImageIdentity, MAX_RESPONSE_BYTES, ProposalKind,
+};
+pub use comparison::{BuildComparison, ChangeKind, FunctionChange, MatchBasis, compare_builds};
 pub use decompile::{Decompilation, decompile};
 pub use ghidra_xml::{GhidraImport, import_ghidra_xml};
 pub use image::{

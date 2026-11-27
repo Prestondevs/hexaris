@@ -15,6 +15,7 @@ use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, Messag
 
 use crate::theme::{self, Theme};
 
+mod tools;
 mod views;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -137,6 +138,7 @@ pub struct App {
     show_inspector: bool,
     show_raw: bool,
     patch_dialog: Option<PatchDialog>,
+    tools_dialog: Option<tools::ToolsDialog>,
     raw_base: String,
     raw_arch: Architecture,
     mark: Option<TextureHandle>,
@@ -164,6 +166,7 @@ impl App {
             show_inspector: true,
             show_raw: false,
             patch_dialog: None,
+            tools_dialog: None,
             raw_base: "0x1000".into(),
             raw_arch: Architecture::X86_64,
             mark: theme::artwork_texture(ctx),
@@ -753,6 +756,7 @@ impl App {
                         {
                             self.state.view = View::Search;
                         }
+                        self.tools_menu(ui);
                     });
                 });
             });
@@ -1121,6 +1125,7 @@ impl eframe::App for App {
             self.raw_window(ctx);
         }
         self.patch_window(ctx);
+        self.tools_window(ctx);
     }
 }
 
