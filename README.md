@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/branding/readme-banner.jpg" width="100%" alt="Panoramic oil painting of a golden star reflected in a lake beneath a midnight sky">
+  <img src="docs/images/alchemist-banner.jpg" width="100%" alt="An alchemist writes at a desk surrounded by books, papers, and laboratory objects">
+  <br>
+  <sub>Thomas Wijck, <em>The Alchemist</em> (detail), c. 1660–1670. Dupper Wzn. Bequest, Dordrecht. Public domain. <a href="https://id.rijksmuseum.nl/20026963">Rijksmuseum, SK-A-489</a></sub>
 </p>
 
 <h1 align="center">Hexaris</h1>

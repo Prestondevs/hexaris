@@ -1,20 +1,18 @@
 [[asset]]
-file = "branding/hexaris.svg"
-source = "Hexaris contributors"
-license = "MIT"
-usage = "Original Hexaris mark"
-
-[[asset]]
 file = "branding/starry-night.png"
 source = "Original artwork for Hexaris"
 license = "MIT"
 usage = "Window icon, desktop header, and welcome screen"
 
 [[asset]]
-file = "branding/readme-banner.jpg"
-source = "Panoramic adaptation of the Hexaris starlit lake artwork"
-license = "MIT"
-usage = "README banner"
+file = "../docs/images/alchemist-banner.jpg"
+source = "https://id.rijksmuseum.nl/20026963"
+image_source = "https://iiif.micr.io/xHsCK/0,1229,4065,2136/1600,/0/default.jpg"
+credit = "Thomas Wijck, The Alchemist, c. 1660–1670. Rijksmuseum, SK-A-489. Dupper Wzn. Bequest, Dordrecht."
+license = "Public domain"
+rights_url = "https://creativecommons.org/publicdomain/mark/1.0/"
+modifications = "Detail matching the Rijksmuseum collection preview, served at 1600 pixels wide by the museum's image service."
+usage = "README banner only"
 
 [[collection]]
 source = "https://github.com/tabler/tabler-icons"
