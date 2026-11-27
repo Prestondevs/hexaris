@@ -97,6 +97,13 @@ pub struct Export {
 }
 
 #[derive(Debug, Serialize)]
+pub struct UnwindFunction {
+    pub address: u64,
+    pub end: u64,
+    pub unwind_info: u64,
+}
+
+#[derive(Debug, Serialize)]
 pub struct ImageInfo {
     pub format: &'static str,
     pub architecture: Architecture,
@@ -110,6 +117,7 @@ pub struct ImageInfo {
     pub symbols: Vec<Symbol>,
     pub imports: Vec<Import>,
     pub exports: Vec<Export>,
+    pub unwind_functions: Vec<UnwindFunction>,
     pub metadata_warnings: Vec<String>,
 }
 
@@ -175,6 +183,7 @@ impl Image {
                     symbols: Vec::new(),
                     imports: Vec::new(),
                     exports: Vec::new(),
+                    unwind_functions: Vec::new(),
                     metadata_warnings: Vec::new(),
                 }
             }
@@ -386,6 +395,12 @@ fn parse_object(bytes: &[u8]) -> Result<ImageInfo> {
         }
     };
     exports.sort_by(|a, b| (a.address, &a.name).cmp(&(b.address, &b.name)));
+    let unwind_functions = match &file {
+        object::File::Pe64(pe) if architecture == Architecture::X86_64 => {
+            pe_unwind_functions(pe, bytes, &mut metadata_warnings)
+        }
+        _ => Vec::new(),
+    };
     Ok(ImageInfo {
         format,
         architecture,
@@ -399,8 +414,87 @@ fn parse_object(bytes: &[u8]) -> Result<ImageInfo> {
         symbols,
         imports,
         exports,
+        unwind_functions,
         metadata_warnings,
     })
+}
+
+fn pe_unwind_functions(
+    file: &object::read::pe::PeFile64<'_>,
+    bytes: &[u8],
+    warnings: &mut Vec<String>,
+) -> Vec<UnwindFunction> {
+    const WIDTH: usize = 12;
+    const LIMIT: usize = 65_536;
+    let Some(directory) = file.data_directory(object::pe::IMAGE_DIRECTORY_ENTRY_EXCEPTION) else {
+        return Vec::new();
+    };
+    let sections = file.section_table();
+    let data = match directory.data(bytes, &sections) {
+        Ok(data) => data,
+        Err(error) => {
+            warnings.push(format!("PE exception directory: {error}"));
+            return Vec::new();
+        }
+    };
+    if !data.len().is_multiple_of(WIDTH) {
+        warnings.push("PE exception directory has an incomplete final record".into());
+    }
+    if data.len() / WIDTH > LIMIT {
+        warnings.push(format!(
+            "PE exception directory inventory is limited to {LIMIT} records"
+        ));
+    }
+    let base = file.relative_address_base();
+    let mut functions = Vec::new();
+    let mut skipped = 0;
+    for record in data.as_chunks::<WIDTH>().0.iter().take(LIMIT) {
+        let rva = |offset| {
+            u32::from_le_bytes(
+                record[offset..offset + 4]
+                    .try_into()
+                    .expect("four bytes within record"),
+            )
+        };
+        let (start, end, unwind) = (rva(0), rva(4), rva(8));
+        let header = sections
+            .pe_data_at(bytes, unwind)
+            .and_then(|bytes| bytes.first())
+            .copied();
+        let Some(header) = header.filter(|header| matches!(header & 0b111, 1 | 2)) else {
+            skipped += 1;
+            continue;
+        };
+        if header & (0x04 << 3) != 0 {
+            continue;
+        } // A chained record covers a fragment of its primary function.
+        let Some((address, end, unwind_info)) = base
+            .checked_add(u64::from(start))
+            .zip(base.checked_add(u64::from(end)))
+            .zip(base.checked_add(u64::from(unwind)))
+            .map(|((address, end), unwind_info)| (address, end, unwind_info))
+        else {
+            skipped += 1;
+            continue;
+        };
+        if start == 0 || address >= end || unwind == 0 || !unwind.is_multiple_of(4) {
+            skipped += 1;
+            continue;
+        }
+        functions.push(UnwindFunction {
+            address,
+            end,
+            unwind_info,
+        });
+    }
+    if skipped > 0 {
+        warnings.push(format!(
+            "Ignored {skipped} malformed or unsupported PE unwind records"
+        ));
+    }
+    functions.sort_unstable_by_key(|function| (function.address, function.end));
+    functions.dedup_by_key(|function| function.address);
+    functions
 }
 
 fn valid_file_range(range: Option<(u64, u64)>, length: usize) -> (Option<u64>, u64) {

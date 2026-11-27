@@ -5,8 +5,9 @@ use std::{
 
 use clap::{Args, Parser, Subcommand, ValueEnum, value_parser};
 use hexaris_engine::{
-    Architecture, BytePatch, BytePattern, Image, LoadMode, Project, analyze, analyze_function,
-    decompile, disassemble, lift, parse_address, scan_strings,
+    Architecture, BytePatch, BytePattern, Image, LoadMode, Project, ReferenceIndex, analyze,
+    analyze_function, decompile, disassemble, import_ghidra_xml, lift, parse_address, scan_strings,
+    triage,
 };
 use serde_json::json;
 
@@ -21,6 +22,18 @@ struct Cli {
 enum Command {
     /// Print executable metadata as JSON.
     Inspect(Input),
+    /// Triage one or more binaries or projects and emit a report for each path.
+    Triage {
+        #[arg(required = true, num_args = 1..)]
+        paths: Vec<PathBuf>,
+    },
+    /// Report direct references and call sites for a virtual address.
+    References {
+        #[command(flatten)]
+        input: Input,
+        #[arg(value_parser = parse_address)]
+        address: u64,
+    },
     /// Decode a sequential range of executable bytes as JSON.
     Disassemble {
         #[command(flatten)]
@@ -121,16 +134,28 @@ enum ProjectAction {
         path: PathBuf,
         #[arg(value_parser = parse_address)]
         address: u64,
-        #[arg(long, required_unless_present = "name")]
+        #[arg(long, required_unless_present_any = ["name", "bookmark"])]
         comment: Option<String>,
         #[arg(long)]
         name: Option<String>,
+        #[arg(long)]
+        bookmark: Option<String>,
     },
     /// Read annotations for an address.
     Annotation {
         path: PathBuf,
         #[arg(value_parser = parse_address)]
         address: u64,
+    },
+    /// List saved address bookmarks.
+    Bookmarks { path: PathBuf },
+    /// Merge names, comments, and bookmarks from a Ghidra XML export.
+    ImportGhidra {
+        path: PathBuf,
+        xml: PathBuf,
+        /// Report how many entries would be added without saving the project.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -177,6 +202,41 @@ fn write_json(
 fn execute(command: Command, output: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
     match command {
         Command::Inspect(input) => write_json(output, &json!(input.open()?.image().info))?,
+        Command::Triage { paths } => {
+            let mut failed = 0;
+            let mut reports = Vec::with_capacity(paths.len());
+            for path in paths {
+                let input = Input {
+                    path,
+                    raw: None,
+                    base: None,
+                };
+                let display = input.path.to_string_lossy();
+                match input.open() {
+                    Ok(project) => {
+                        reports.push(json!({ "path": display, "report": triage(project.image()) }))
+                    }
+                    Err(error) => {
+                        failed += 1;
+                        reports.push(json!({ "path": display, "error": error.to_string() }));
+                    }
+                }
+            }
+            write_json(output, &json!({ "reports": reports, "failed": failed }))?;
+            output.flush()?;
+            if failed > 0 {
+                return Err(format!("triage failed for {failed} input(s)").into());
+            }
+        }
+        Command::References { input, address } => {
+            let project = input.open()?;
+            let analysis = analyze(project.image());
+            let references = ReferenceIndex::build(&analysis);
+            write_json(
+                output,
+                &json!({ "address": address, "incoming": references.incoming(address), "outgoing": references.outgoing(address), "callers": references.callers(address), "callees": references.callees(address), "notices": analysis.notices }),
+            )?;
+        }
         Command::Disassemble {
             input,
             address,
@@ -298,6 +358,7 @@ fn execute(command: Command, output: &mut impl Write) -> Result<(), Box<dyn std:
                 address,
                 comment,
                 name,
+                bookmark,
             } => {
                 let mut project = Project::open(&path)?;
                 if let Some(value) = comment {
@@ -306,14 +367,33 @@ fn execute(command: Command, output: &mut impl Write) -> Result<(), Box<dyn std:
                 if let Some(value) = name {
                     project.set_function_name(address, value)?;
                 }
+                if let Some(value) = bookmark {
+                    project.set_bookmark(address, value)?;
+                }
                 project.save(&path)?;
             }
             ProjectAction::Annotation { path, address } => {
                 let project = Project::open(&path)?;
                 write_json(
                     output,
-                    &json!({ "address": address, "comment": project.comment(address), "name": project.function_name(address) }),
+                    &json!({ "address": address, "comment": project.comment(address), "name": project.function_name(address), "bookmark": project.bookmark(address) }),
                 )?;
+            }
+            ProjectAction::Bookmarks { path } => {
+                let project = Project::open(&path)?;
+                let bookmarks: Vec<_> = project
+                    .bookmarks()
+                    .map(|(address, name)| json!({ "address": address, "name": name }))
+                    .collect();
+                write_json(output, &json!(bookmarks))?;
+            }
+            ProjectAction::ImportGhidra { path, xml, dry_run } => {
+                let mut project = Project::open(&path)?;
+                let report = import_ghidra_xml(&mut project, &xml)?;
+                if !dry_run && report.added() > 0 {
+                    project.save(&path)?;
+                }
+                write_json(output, &json!(report))?;
             }
         },
     }

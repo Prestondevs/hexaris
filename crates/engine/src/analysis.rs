@@ -91,14 +91,21 @@ pub fn analyze(image: &Image) -> Analysis {
     }
     let mut seeds = function_seeds(image);
     let mut pending: BTreeSet<_> = seeds.keys().copied().collect();
+    let mut priority: BTreeSet<_> = image
+        .info
+        .entry
+        .filter(|address| pending.contains(address))
+        .into_iter()
+        .collect();
+    let mut call_seeds = 0;
     let mut remaining = TOTAL_LIMIT;
     if pending.is_empty() {
-        analysis.notices.push(
-            "No executable entry point or function symbols. Choose a code address to analyze."
-                .into(),
-        );
+        analysis
+            .notices
+            .push("No mapped function roots. Choose a code address to analyze.".into());
     }
-    while let Some(address) = pending.pop_first() {
+    while let Some(address) = priority.pop_first().or_else(|| pending.pop_first()) {
+        pending.remove(&address);
         if analysis.functions.len() == FUNCTION_LIMIT || remaining == 0 {
             analysis
                 .notices
@@ -109,12 +116,17 @@ pub fn analyze(image: &Image) -> Analysis {
         remaining -= function.instructions.len();
         for reference in &function.references {
             if reference.kind == ReferenceKind::Call
+                && reference.target != address
+                && !analysis.functions.contains_key(&reference.target)
                 && image.executable_bytes(reference.target).is_some()
-                && !seeds.contains_key(&reference.target)
-                && seeds.len() < FUNCTION_LIMIT
             {
-                seeds.insert(reference.target, Seed::default());
-                pending.insert(reference.target);
+                if pending.contains(&reference.target) {
+                    priority.insert(reference.target);
+                } else if call_seeds < FUNCTION_LIMIT && !seeds.contains_key(&reference.target) {
+                    seeds.insert(reference.target, Seed::default());
+                    priority.insert(reference.target);
+                    call_seeds += 1;
+                }
             }
         }
         analysis.functions.insert(address, function);
@@ -240,12 +252,31 @@ fn function_seeds(image: &Image) -> BTreeMap<u64, Seed<'_>> {
     for symbol in &image.info.symbols {
         if symbol.is_function && image.executable_bytes(symbol.address).is_some() {
             let seed = seeds.entry(symbol.address).or_default();
-            if seed.end.is_none() {
+            if seed.name.is_none() || seed.name == Some("entry") {
                 seed.name = Some(&symbol.name);
+            }
+            if seed.end.is_none() {
                 seed.end = (symbol.size > 0)
                     .then(|| symbol.address.checked_add(symbol.size))
                     .flatten();
             }
+        }
+    }
+    for export in &image.info.exports {
+        if image.executable_bytes(export.address).is_some() {
+            let seed = seeds.entry(export.address).or_default();
+            seed.name.get_or_insert(&export.name);
+        }
+    }
+    for range in &image.info.unwind_functions {
+        if image.executable_bytes(range.address).is_some_and(|code| {
+            range
+                .end
+                .checked_sub(range.address)
+                .is_some_and(|length| length > 0 && length <= code.len() as u64)
+        }) {
+            let seed = seeds.entry(range.address).or_default();
+            seed.end = Some(seed.end.map_or(range.end, |end| end.min(range.end)));
         }
     }
     seeds

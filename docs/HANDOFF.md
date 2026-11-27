@@ -4,4 +4,4 @@ The repository contains an independent engine, desktop and CLI. Windows x64 curr
 
 Before making changes, run the commands in [the contributor guide](../CONTRIBUTING.md). Restore research prerequisites from [the development environment](DEVELOPMENT_ENVIRONMENT.md) if working on another machine. Keep local reference binaries and evidence out of the repository.
 
-The next engine task is to add a linked ELF fixture and PE unwind-table seeding with explicit address mapping tests. Verify stripped executables and reconcile duplicate or overlapping function roots before expanding instruction semantics. Update the feature matrix and test report with results.
+The current release added stripped ELF segment fallback coverage and PE unwind-table seeding. The next engine task is to reconcile chained unwind ranges and tail calls, then expand typed instruction semantics and non-leaf decompilation on independently compiled fixtures. The [paid workflow inventory](PRO_FEATURES.md) also identifies the remaining debugger, type library, plugin, and workspace work. Update the feature matrix and test report with results.

@@ -2,31 +2,216 @@ use eframe::egui::{
     self, Color32, ColorImage, Context, FontId, IconData, Stroke, TextureHandle, TextureOptions,
 };
 
-pub const ACCENT: Color32 = Color32::from_rgb(129, 227, 189);
-pub const MUTED: Color32 = Color32::from_rgb(150, 167, 173);
-pub const TEXT: Color32 = Color32::from_rgb(223, 233, 232);
-pub const BG: Color32 = Color32::from_rgb(13, 19, 22);
-pub const PANEL: Color32 = Color32::from_rgb(20, 27, 31);
-pub const RAISED: Color32 = Color32::from_rgb(27, 37, 41);
-pub const BORDER: Color32 = Color32::from_rgb(45, 61, 65);
-pub const WARN: Color32 = Color32::from_rgb(240, 194, 126);
 pub const MARK: &[u8] = include_bytes!("../../../assets/branding/hexaris.svg");
+pub const STORAGE_KEY: &str = "hexaris.theme";
 
-pub fn install(ctx: &Context) {
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Theme {
+    #[default]
+    Graphite,
+    Slate,
+    Ash,
+    Foundry,
+    HighContrast,
+}
+
+#[derive(Clone, Copy)]
+pub struct Palette {
+    pub bg: Color32,
+    pub panel: Color32,
+    pub raised: Color32,
+    pub border: Color32,
+    pub text: Color32,
+    pub muted: Color32,
+    pub accent: Color32,
+    pub warn: Color32,
+    hover: Color32,
+    selection: Color32,
+}
+
+const fn rgb(hex: u32) -> Color32 {
+    Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8)
+}
+
+impl Theme {
+    pub const ALL: [Self; 5] = [
+        Self::Graphite,
+        Self::Slate,
+        Self::Ash,
+        Self::Foundry,
+        Self::HighContrast,
+    ];
+
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Graphite => "graphite",
+            Self::Slate => "slate",
+            Self::Ash => "ash",
+            Self::Foundry => "foundry",
+            Self::HighContrast => "high-contrast",
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Graphite => "Graphite",
+            Self::Slate => "Slate",
+            Self::Ash => "Ash Light",
+            Self::Foundry => "Foundry",
+            Self::HighContrast => "High Contrast",
+        }
+    }
+
+    pub fn restore(storage: Option<&dyn eframe::Storage>) -> Self {
+        storage
+            .and_then(|store| store.get_string(STORAGE_KEY))
+            .and_then(|id| Self::ALL.into_iter().find(|theme| theme.id() == id))
+            .unwrap_or_default()
+    }
+
+    pub const fn palette(self) -> Palette {
+        match self {
+            Self::Graphite => Palette {
+                bg: rgb(0x1C1D20),
+                panel: rgb(0x24262A),
+                raised: rgb(0x2D3035),
+                border: rgb(0x42464D),
+                text: rgb(0xEDF0F3),
+                muted: rgb(0xAAB0B9),
+                accent: rgb(0xA8C9F0),
+                warn: rgb(0xEDC088),
+                hover: rgb(0x393F47),
+                selection: rgb(0x38495E),
+            },
+            Self::Slate => Palette {
+                bg: rgb(0x1B212A),
+                panel: rgb(0x222A35),
+                raised: rgb(0x2B3543),
+                border: rgb(0x455469),
+                text: rgb(0xE7EEF8),
+                muted: rgb(0xAFBCD0),
+                accent: rgb(0xABC8FF),
+                warn: rgb(0xF4C98D),
+                hover: rgb(0x36455A),
+                selection: rgb(0x354D71),
+            },
+            Self::Ash => Palette {
+                bg: rgb(0xE7E9EC),
+                panel: rgb(0xF0F1F3),
+                raised: rgb(0xDDE1E6),
+                border: rgb(0xAFB7C2),
+                text: rgb(0x22272F),
+                muted: rgb(0x525D6A),
+                accent: rgb(0x215997),
+                warn: rgb(0x8A4D12),
+                hover: rgb(0xDEE5EE),
+                selection: rgb(0xC5D9F1),
+            },
+            Self::Foundry => Palette {
+                bg: rgb(0x221F1E),
+                panel: rgb(0x2A2725),
+                raised: rgb(0x35312E),
+                border: rgb(0x544A42),
+                text: rgb(0xF2EBE4),
+                muted: rgb(0xBCB0A5),
+                accent: rgb(0xF1BC94),
+                warn: rgb(0xF4D08D),
+                hover: rgb(0x403932),
+                selection: rgb(0x533D32),
+            },
+            Self::HighContrast => Palette {
+                bg: rgb(0x0D0D0D),
+                panel: rgb(0x171717),
+                raised: rgb(0x252525),
+                border: rgb(0x777777),
+                text: rgb(0xFFFFFF),
+                muted: rgb(0xD1D1D1),
+                accent: rgb(0xBBD9FF),
+                warn: rgb(0xFFDD91),
+                hover: rgb(0x383838),
+                selection: rgb(0x274768),
+            },
+        }
+    }
+
+    pub fn previews(self, ui: &mut egui::Ui) -> bool {
+        let palette = self.palette();
+        let mut picked = false;
+        for (label, color) in [
+            ("Canvas", palette.bg),
+            ("Panel", palette.panel),
+            ("Accent", palette.accent),
+            ("Text", palette.text),
+        ] {
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(15.0, 15.0), egui::Sense::click());
+            ui.painter().rect(
+                rect,
+                2,
+                color,
+                Stroke::new(1.0_f32, palette.border),
+                egui::StrokeKind::Inside,
+            );
+            picked |= response
+                .on_hover_text(format!(
+                    "{label} #{:02X}{:02X}{:02X}",
+                    color.r(),
+                    color.g(),
+                    color.b()
+                ))
+                .clicked();
+        }
+        picked
+    }
+}
+
+pub fn current(ctx: &Context) -> Palette {
+    ctx.data(|data| data.get_temp::<Theme>(egui::Id::new(STORAGE_KEY)))
+        .unwrap_or_default()
+        .palette()
+}
+
+pub fn install(ctx: &Context, theme: Theme) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(STORAGE_KEY), theme));
+    let base = if theme == Theme::Ash {
+        egui::Theme::Light
+    } else {
+        egui::Theme::Dark
+    };
+    ctx.set_theme(base);
     let mut style = (*ctx.style()).clone();
-    style.visuals = egui::Visuals::dark();
-    style.visuals.panel_fill = PANEL;
-    style.visuals.window_fill = PANEL;
-    style.visuals.extreme_bg_color = BG;
-    style.visuals.override_text_color = Some(TEXT);
-    style.visuals.faint_bg_color = RAISED;
-    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
-    style.visuals.widgets.inactive.bg_fill = RAISED;
-    style.visuals.widgets.inactive.weak_bg_fill = RAISED;
-    style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(43, 66, 64);
-    style.visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(43, 66, 64);
-    style.visuals.selection.bg_fill = Color32::from_rgb(36, 70, 62);
-    style.visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
+    let palette = theme.palette();
+    let mut visuals = base.default_visuals();
+    visuals.panel_fill = palette.panel;
+    visuals.window_fill = palette.panel;
+    visuals.extreme_bg_color = palette.bg;
+    visuals.override_text_color = Some(palette.text);
+    visuals.faint_bg_color = palette.raised;
+    visuals.hyperlink_color = palette.accent;
+    visuals.warn_fg_color = palette.warn;
+    visuals.window_stroke.color = palette.border;
+    visuals.widgets.noninteractive.bg_stroke.color = palette.border;
+    for widget in [
+        &mut visuals.widgets.inactive,
+        &mut visuals.widgets.hovered,
+        &mut visuals.widgets.active,
+        &mut visuals.widgets.open,
+    ] {
+        widget.fg_stroke.color = palette.text;
+        widget.bg_stroke.color = palette.border;
+    }
+    for (widget, fill) in [
+        (&mut visuals.widgets.inactive, palette.raised),
+        (&mut visuals.widgets.hovered, palette.hover),
+        (&mut visuals.widgets.active, palette.selection),
+        (&mut visuals.widgets.open, palette.hover),
+    ] {
+        widget.bg_fill = fill;
+        widget.weak_bg_fill = fill;
+    }
+    visuals.selection.bg_fill = palette.selection;
+    visuals.selection.stroke = Stroke::new(1.0_f32, palette.accent);
+    style.visuals = visuals;
     style.spacing.item_spacing = egui::vec2(8.0, 5.0);
     style.spacing.button_padding = egui::vec2(10.0, 5.0);
     style.spacing.interact_size.y = 24.0;
@@ -91,7 +276,49 @@ pub fn tabler(ctx: &Context, name: &str, svg: &str) -> Option<TextureHandle> {
     texture(
         ctx,
         name,
-        svg.replace("currentColor", "#DFE9E8").as_bytes(),
+        svg.replace("currentColor", "#FFFFFF").as_bytes(),
         48,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn palette_labels_are_readable_across_workbench_surfaces() {
+        for theme in Theme::ALL {
+            let palette = theme.palette();
+            for surface in [palette.bg, palette.panel, palette.raised, palette.selection] {
+                assert!(
+                    contrast(palette.text, surface) >= 4.5,
+                    "{} text",
+                    theme.name()
+                );
+            }
+            for ink in [palette.muted, palette.accent, palette.warn] {
+                assert!(
+                    contrast(ink, palette.panel) >= 4.5,
+                    "{} panel text",
+                    theme.name()
+                );
+            }
+        }
+    }
+
+    fn contrast(first: Color32, second: Color32) -> f64 {
+        let map = |value: u8| {
+            let value = f64::from(value) / 255.0;
+            if value <= 0.04045 {
+                value / 12.92
+            } else {
+                ((value + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let luminance = |color: Color32| {
+            0.2126 * map(color.r()) + 0.7152 * map(color.g()) + 0.0722 * map(color.b())
+        };
+        let (first, second) = (luminance(first), luminance(second));
+        (first.max(second) + 0.05) / (first.min(second) + 0.05)
+    }
 }

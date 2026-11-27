@@ -50,14 +50,16 @@
       "implementation_files": [
         "crates/engine/src/image.rs"
       ],
-      "implementation_status": "IMPLEMENTED_UNVERIFIED",
-      "test_files": [],
-      "test_results": null,
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "crates/engine/tests/advanced.rs"
+      ],
+      "test_results": "Stripped ELF64 executable fixture validated PT_LOAD mapping, discovery, and unbacked zero-fill.",
       "visual_validation_status": "UNINVESTIGATED",
-      "functional_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Linked ELF verification across compiler and stripping variants remains open."
+        "More ELF ABIs, toolchains, and relocation variants need validation."
       ]
     },
     {
@@ -194,14 +196,17 @@
       "test_files": [
         "crates/engine/tests/workflows.rs",
         "tests/fixtures/score.c",
-        "tests/fixtures/HexarisProbe.java"
+        "tests/fixtures/HexarisProbe.java",
+        "crates/engine/tests/advanced.rs",
+        "scripts/verify-workstation.ps1",
+        "tests/fixtures/unwind.c"
       ],
-      "test_results": null,
+      "test_results": "Verified x64 PE exception-directory discovery of an uncalled function and an executable named export.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Indirect targets, stripped discovery beyond direct calls, unwind tables and jump tables need support."
+        "Indirect calls, secondary unwind fragments, tail calls, and jump tables remain open."
       ]
     },
     {
@@ -278,15 +283,18 @@
       "dependencies": [],
       "implementation_files": [
         "crates/engine/src/analysis.rs",
-        "apps/desktop/src/app/views.rs"
+        "apps/desktop/src/app/views.rs",
+        "crates/engine/src/references.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
         "crates/engine/tests/workflows.rs",
         "tests/fixtures/score.c",
-        "tests/fixtures/HexarisProbe.java"
+        "tests/fixtures/HexarisProbe.java",
+        "crates/engine/tests/advanced.rs",
+        "scripts/verify-workstation.ps1"
       ],
-      "test_results": null,
+      "test_results": "Indexed address ownership, incoming/outgoing references, call sites and CLI navigation data passed.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
@@ -488,14 +496,16 @@
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
-        "crates/engine/tests/workflows.rs"
+        "crates/engine/tests/workflows.rs",
+        "crates/engine/tests/advanced.rs",
+        "scripts/verify-workstation.ps1"
       ],
-      "test_results": "Project replacement, no-clobber creation, annotation removal and corruption handling passed.",
+      "test_results": "Verified v1 project compatibility, v2 bookmark persistence, annotation removal and integrity handling.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Recomputes analysis on reopen. Multi-project workspaces are open."
+        "Analysis is recomputed on reopen. Multi-document sessions do not persist as a combined workspace file."
       ]
     },
     {
@@ -517,9 +527,10 @@
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
-        "scripts/verify-windows-fixture.ps1"
+        "scripts/verify-windows-fixture.ps1",
+        "scripts/verify-workstation.ps1"
       ],
-      "test_results": "PE identification, CFG, decompilation, annotations, disassembly and patch checked in release build.",
+      "test_results": "Verified ordered triage with mixed outcomes, indexed references, and Ghidra XML preview and import.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
@@ -553,7 +564,7 @@
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "One active file and fixed resizable side panels."
+        "Multiple open tabs retain independent view state. Docking and durable workspace manifests remain open."
       ]
     },
     {
@@ -667,15 +678,20 @@
       ],
       "rea_investigation_id": null,
       "dependencies": [],
-      "implementation_files": [],
-      "implementation_status": "MISSING",
-      "test_files": [],
-      "test_results": null,
-      "visual_validation_status": "UNINVESTIGATED",
-      "functional_validation_status": "UNINVESTIGATED",
+      "implementation_files": [
+        "apps/desktop/src/theme.rs",
+        "apps/desktop/src/app.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "apps/desktop/src/theme.rs"
+      ],
+      "test_results": "All five themes passed color contrast checks; the Windows menu showed named palettes and interactive swatches.",
+      "visual_validation_status": "VERIFIED",
+      "functional_validation_status": "VERIFIED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Current desktop colors are fixed and navigation state is ephemeral."
+        "Theme selection is persisted. Custom palette editing and configurable keybindings remain open."
       ]
     },
     {
@@ -715,7 +731,9 @@
       "dependencies": [],
       "implementation_files": [
         "apps/desktop/src/app.rs",
-        "crates/engine/src/analysis.rs"
+        "crates/engine/src/analysis.rs",
+        "crates/engine/src/references.rs",
+        "crates/engine/src/triage.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [],
@@ -724,7 +742,7 @@
       "functional_validation_status": "UNINVESTIGATED",
       "known_differences": [],
       "unresolved_limitations": [
-        "Background file loading and search, UI virtualization, and analysis budgets are implemented. Large-corpus benchmarks remain open."
+        "Background loading and search, indexed references, virtualization and analysis budgets are implemented. Long-run benchmarks remain open."
       ]
     },
     {
@@ -751,6 +769,125 @@
       "known_differences": [],
       "unresolved_limitations": [
         "Windows x64 is validated. Linux and macOS runtime verification and packaging remain open."
+      ]
+    },
+    {
+      "id": "PRO-BATCH",
+      "category": "headless",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Batch triage",
+      "reference_behavior": "Process multiple images without opening the desktop.",
+      "evidence_source": [
+        "docs/PRO_FEATURES.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "apps/cli/src/main.rs",
+        "crates/engine/src/triage.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "scripts/verify-workstation.ps1",
+        "crates/engine/tests/advanced.rs"
+      ],
+      "test_results": "Verified ordered output and a preserved error record for a missing middle input.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Batch reports summarize metadata and entropy. Detailed analysis still runs per image."
+      ]
+    },
+    {
+      "id": "TRIAGE",
+      "category": "analysis utilities",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Image overview and entropy navigation",
+      "reference_behavior": "Inspect file identity and navigate to interesting regions.",
+      "evidence_source": [
+        "docs/PRO_FEATURES.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "apps/desktop/src/app/views.rs",
+        "crates/engine/src/triage.rs"
+      ],
+      "implementation_status": "VERIFIED",
+      "test_files": [
+        "scripts/verify-workstation.ps1",
+        "crates/engine/tests/advanced.rs"
+      ],
+      "test_results": "Verified uniform and full-entropy samples, file digest, and click-through to Hex.",
+      "visual_validation_status": "VERIFIED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Shannon entropy does not classify file contents."
+      ]
+    },
+    {
+      "id": "INTEROP",
+      "category": "interoperability",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Ghidra XML annotations",
+      "reference_behavior": "Apply annotations exported by another analysis workspace.",
+      "evidence_source": [
+        "docs/PRO_FEATURES.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/ghidra_xml.rs",
+        "apps/cli/src/main.rs",
+        "apps/desktop/src/app.rs"
+      ],
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "test_files": [
+        "scripts/verify-workstation.ps1",
+        "crates/engine/tests/advanced.rs",
+        "tests/fixtures/ExportFixtureXml.java"
+      ],
+      "test_results": "Verified preview and import of actual Ghidra 12.2 XML and preserved preexisting local annotations.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Supports flat mapped names, comments and bookmarks. Types, data, maps, Ghidra containers and IDB remain open."
+      ]
+    },
+    {
+      "id": "BOOKMARKS",
+      "category": "persistence",
+      "reference_version": null,
+      "reference_edition": null,
+      "feature_name": "Named address bookmarks",
+      "reference_behavior": "Save annotated locations and revisit them.",
+      "evidence_source": [
+        "docs/PRO_FEATURES.md"
+      ],
+      "rea_investigation_id": null,
+      "dependencies": [],
+      "implementation_files": [
+        "crates/engine/src/project.rs",
+        "apps/desktop/src/app/views.rs",
+        "apps/cli/src/main.rs"
+      ],
+      "implementation_status": "VERIFIED",
+      "test_files": [
+        "crates/engine/tests/advanced.rs",
+        "scripts/verify-workstation.ps1"
+      ],
+      "test_results": "Verified save and reopen, removal, validation and compatibility with v1 projects.",
+      "visual_validation_status": "UNINVESTIGATED",
+      "functional_validation_status": "VERIFIED",
+      "known_differences": [],
+      "unresolved_limitations": [
+        "Bookmarks refer to file-backed virtual addresses."
       ]
     }
   ]

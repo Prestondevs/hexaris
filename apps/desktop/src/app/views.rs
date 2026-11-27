@@ -1,37 +1,39 @@
 use std::{collections::BTreeMap, fmt::Write as _};
 
 use eframe::egui::{self, Align2, FontId, Grid, Rect, Sense, Stroke, StrokeKind, pos2, vec2};
-use hexaris_engine::{EdgeKind, Image, Reference, Region};
+use hexaris_engine::{CallSite, EdgeKind, Image, Reference, Region};
 
 use super::*;
-use crate::theme::{BORDER, RAISED, TEXT};
 
 const ROW: f32 = 22.0;
 
 impl App {
     pub(super) fn navigator(&mut self, ui: &mut Ui) {
+        let palette = self.theme.palette();
         let Some(session) = &self.session else { return };
         ui.heading("Image browser");
         let info = &session.project.image().info;
         ui.label(
             RichText::new(format!("{}  /  {}", info.format, info.architecture.name()))
-                .color(ACCENT),
+                .color(palette.accent),
         );
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
-            ui.selectable_value(&mut self.browser_tab, 0, "Functions");
-            ui.selectable_value(&mut self.browser_tab, 1, "Regions");
-            ui.selectable_value(&mut self.browser_tab, 2, "Symbols");
-            ui.selectable_value(&mut self.browser_tab, 3, "Imports");
-            ui.selectable_value(&mut self.browser_tab, 4, "Exports");
+            ui.spacing_mut().button_padding.x = 7.0;
+            ui.selectable_value(&mut self.state.browser_tab, 0, "Functions");
+            ui.selectable_value(&mut self.state.browser_tab, 1, "Regions");
+            ui.selectable_value(&mut self.state.browser_tab, 2, "Symbols");
+            ui.selectable_value(&mut self.state.browser_tab, 3, "Imports");
+            ui.selectable_value(&mut self.state.browser_tab, 4, "Exports");
+            ui.selectable_value(&mut self.state.browser_tab, 5, "Bookmarks");
         });
         ui.separator();
         let mut target = None;
         let mut offset = None;
-        match self.browser_tab {
+        match self.state.browser_tab {
             0 => {
                 ui.add(
-                    egui::TextEdit::singleline(&mut self.filter)
+                    egui::TextEdit::singleline(&mut self.state.filter)
                         .hint_text("Filter functions…")
                         .desired_width(f32::INFINITY),
                 );
@@ -39,7 +41,7 @@ impl App {
                     ui,
                     &format!("{} discovered", session.analysis.functions.len()),
                 );
-                let filter = self.filter.to_lowercase();
+                let filter = self.state.filter.to_lowercase();
                 let rows: Vec<_> = session
                     .analysis
                     .functions
@@ -64,7 +66,7 @@ impl App {
                                 session.function_name(function)
                             );
                             let button = Button::selectable(
-                                self.selected_function == Some(function.address),
+                                self.state.selected_function == Some(function.address),
                                 RichText::new(text).monospace(),
                             )
                             .truncate()
@@ -136,7 +138,7 @@ impl App {
                         }
                     });
             }
-            _ => {
+            4 => {
                 label(ui, &format!("{} named exports", info.exports.len()));
                 ScrollArea::vertical()
                     .id_salt(("exports", self.version))
@@ -154,6 +156,27 @@ impl App {
                         }
                     });
             }
+            _ => {
+                let rows: Vec<_> = session.project.bookmarks().collect();
+                label(ui, &format!("{} saved bookmarks", rows.len()));
+                if rows.is_empty() {
+                    label(ui, "Select an address and press Ctrl+D to bookmark it.");
+                }
+                ScrollArea::vertical()
+                    .id_salt(("bookmarks", self.version))
+                    .show_rows(ui, ROW, rows.len(), |ui, range| {
+                        for &(address, name) in &rows[range] {
+                            let text = format!("{address:X}   {name}");
+                            if ui
+                                .add(Button::new(RichText::new(&text).monospace()).truncate())
+                                .on_hover_text(text)
+                                .clicked()
+                            {
+                                target = Some(address);
+                            }
+                        }
+                    });
+            }
         }
         if let Some(address) = target {
             self.goto(address);
@@ -164,24 +187,28 @@ impl App {
     }
 
     pub(super) fn workspace(&mut self, ui: &mut Ui) {
+        let palette = self.theme.palette();
         let mut nav = None;
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(!self.navigation_back.is_empty(), Button::new("Back"))
+                .add_enabled(!self.state.navigation_back.is_empty(), Button::new("Back"))
                 .on_hover_text("Back")
                 .clicked()
             {
                 self.history(false);
             }
             if ui
-                .add_enabled(!self.navigation_forward.is_empty(), Button::new("Forward"))
+                .add_enabled(
+                    !self.state.navigation_forward.is_empty(),
+                    Button::new("Forward"),
+                )
                 .on_hover_text("Forward")
                 .clicked()
             {
                 self.history(true);
             }
             let address_input = ui.add(
-                egui::TextEdit::singleline(&mut self.jump_text)
+                egui::TextEdit::singleline(&mut self.state.jump_text)
                     .font(egui::TextStyle::Monospace)
                     .hint_text("Virtual address")
                     .desired_width(134.0),
@@ -200,9 +227,9 @@ impl App {
             }
         });
         if let Some(analyze) = nav {
-            match parse_address(&self.jump_text) {
+            match parse_address(&self.state.jump_text) {
                 Ok(address) if analyze => self.analyze_at(address),
-                Ok(address) if self.view == View::Linear => self.decode_linear(address),
+                Ok(address) if self.state.view == View::Linear => self.decode_linear(address),
                 Ok(address) => self.goto(address),
                 Err(_) => {
                     self.error("Enter a decimal address or prefix a hexadecimal address with 0x.")
@@ -210,28 +237,31 @@ impl App {
             }
         }
         ui.add_space(5.0);
-        let previous = self.view;
+        let previous = self.state.view;
         ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().button_padding.x = 7.0;
             for view in View::ALL {
-                ui.selectable_value(&mut self.view, view, view.label());
+                ui.selectable_value(&mut self.state.view, view, view.label());
             }
         });
-        if self.view == View::Linear
+        if self.state.view == View::Linear
             && previous != View::Linear
-            && let Some(address) = self.selected_address
+            && let Some(address) = self.state.selected_address
         {
             self.decode_linear(address);
         }
         ui.separator();
         if let Some(session) = &self.session {
             for notice in &session.analysis.notices {
-                ui.label(RichText::new(notice).color(WARN));
+                ui.label(RichText::new(notice).color(palette.warn));
             }
             for warning in &session.project.image().info.metadata_warnings {
-                ui.label(RichText::new(warning).color(WARN));
+                ui.label(RichText::new(warning).color(palette.warn));
             }
         }
-        match self.view {
+        match self.state.view {
+            View::Overview => self.overview(ui),
+            View::Calls => self.calls(ui),
             View::Disassembly | View::Flow | View::Registers | View::Pseudocode => {
                 self.function_view(ui)
             }
@@ -242,8 +272,117 @@ impl App {
         }
     }
 
+    fn calls(&mut self, ui: &mut Ui) {
+        let Some(session) = &self.session else { return };
+        let Some(address) = self.state.selected_function else {
+            label(ui, "Select a function to inspect direct calls.");
+            return;
+        };
+        if let Some(function) = session.analysis.functions.get(&address) {
+            ui.heading(session.function_name(function));
+        }
+        label(
+            ui,
+            "Select a function or call site to open it in disassembly.",
+        );
+        let selection = ui.columns(2, |columns| {
+            let caller = call_rows(&mut columns[0], self.version, session, address, true);
+            let callee = call_rows(&mut columns[1], self.version, session, address, false);
+            caller.or(callee)
+        });
+        match selection {
+            Some(CallSelection::Site(caller, site)) => {
+                self.navigate(caller, site);
+                self.state.view = View::Disassembly;
+            }
+            Some(CallSelection::Function(target)) => self.goto(target),
+            None => {}
+        }
+    }
+
+    fn overview(&mut self, ui: &mut Ui) {
+        let Some(session) = &self.session else { return };
+        let info = &session.triage;
+        let mut address = None;
+        let mut offset = None;
+        ScrollArea::both()
+            .id_salt(("image_overview", self.version))
+            .show(ui, |ui| {
+                ui.heading("Image overview");
+                Grid::new("image-metadata")
+                    .spacing([16.0, 5.0])
+                    .show(ui, |ui| {
+                        label(ui, "Format");
+                        ui.label(format!(
+                            "{} · {}-bit {} endian",
+                            info.format,
+                            info.bits,
+                            if info.little_endian { "little" } else { "big" }
+                        ));
+                        ui.end_row();
+                        label(ui, "Architecture");
+                        ui.label(info.architecture.name());
+                        ui.end_row();
+                        label(ui, "Image base");
+                        ui.monospace(
+                            info.image_base
+                                .map_or_else(|| "—".into(), |base| format!("0x{base:X}")),
+                        );
+                        ui.end_row();
+                        label(ui, "Entry point");
+                        if let Some(entry) = info.entry {
+                            if ui.link(format!("0x{entry:X}")).clicked() {
+                                address = Some(entry);
+                            }
+                        } else {
+                            label(ui, "—");
+                        }
+                        ui.end_row();
+                        label(ui, "Size");
+                        ui.label(format!("{} bytes", info.size_bytes));
+                        ui.end_row();
+                        label(ui, "Sections");
+                        ui.label(format!(
+                            "{} total · {} executable",
+                            info.section_count, info.executable_section_count
+                        ));
+                        ui.end_row();
+                        label(ui, "Names");
+                        ui.label(format!(
+                            "{} symbols · {} imports · {} exports",
+                            info.symbol_count, info.named_import_count, info.named_export_count
+                        ));
+                        ui.end_row();
+                    });
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.strong("SHA-256");
+                    if ui.small_button("Copy").clicked() {
+                        ui.ctx().copy_text(info.sha256.clone());
+                    }
+                });
+                ui.monospace(&info.sha256);
+                ui.add_space(13.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.heading("File entropy");
+                    label(
+                        ui,
+                        &format!("{:.3} bits per byte overall", info.entropy_bits_per_byte),
+                    );
+                });
+                offset = entropy_chart(ui, info);
+            });
+        if let Some(address) = address {
+            self.goto(address);
+        }
+        if let Some(offset) = offset {
+            self.show_hex(offset);
+        }
+    }
+
     fn linear_view(&mut self, ui: &mut Ui) {
-        let Some(listing) = &self.linear else {
+        let palette = self.theme.palette();
+        let Some(listing) = &self.state.linear else {
             label(
                 ui,
                 "Enter a virtual address to decode a range of executable bytes.",
@@ -265,7 +404,7 @@ impl App {
                 RichText::new(format!(
                     "Stopped at an invalid or truncated instruction at 0x{address:X}"
                 ))
-                .color(WARN),
+                .color(palette.warn),
             );
         }
         ScrollArea::both()
@@ -282,7 +421,7 @@ impl App {
                     if ui
                         .add(
                             Button::selectable(
-                                self.selected_address == Some(instruction.address),
+                                self.state.selected_address == Some(instruction.address),
                                 RichText::new(text).monospace(),
                             )
                             .min_size(vec2(ui.available_width(), ROW)),
@@ -294,7 +433,7 @@ impl App {
                 }
             });
         if let Some(address) = selected {
-            self.select(self.selected_function, Some(address));
+            self.select(self.state.selected_function, Some(address));
         }
         if let Some(address) = next {
             self.decode_linear(address);
@@ -302,10 +441,12 @@ impl App {
     }
 
     fn function_view(&mut self, ui: &mut Ui) {
+        let palette = self.theme.palette();
         let Some(session) = &mut self.session else {
             return;
         };
         let Some(function) = self
+            .state
             .selected_function
             .and_then(|address| session.analysis.functions.get(&address))
         else {
@@ -320,7 +461,7 @@ impl App {
             ui.label(
                 RichText::new(format!("0x{:X}", function.address))
                     .monospace()
-                    .color(ACCENT),
+                    .color(palette.accent),
             );
             label(
                 ui,
@@ -334,17 +475,17 @@ impl App {
         if !function.issues.is_empty() {
             ui.collapsing(format!("{} analysis notes", function.issues.len()), |ui| {
                 for issue in function.issues.iter().take(30) {
-                    ui.label(RichText::new(issue).color(WARN));
+                    ui.label(RichText::new(issue).color(palette.warn));
                 }
             });
         }
         let mut target = None;
-        match self.view {
+        match self.state.view {
             View::Disassembly => {
                 let mut area = ScrollArea::both()
                     .id_salt(("disassembly", self.version, function.address))
                     .auto_shrink([false; 2]);
-                if let Some(row) = self.disassembly_jump.take() {
+                if let Some(row) = self.state.disassembly_jump.take() {
                     area = area.vertical_scroll_offset(
                         (ROW + ui.spacing().item_spacing.y) * row.saturating_sub(3) as f32,
                     );
@@ -371,7 +512,7 @@ impl App {
                             }
                         );
                         let button = Button::selectable(
-                            self.selected_address == Some(instruction.address),
+                            self.state.selected_address == Some(instruction.address),
                             RichText::new(text).monospace(),
                         )
                         .min_size(vec2(ui.available_width(), ROW));
@@ -393,9 +534,11 @@ impl App {
                 });
             }
             View::Flow => {
-                if let Some(address) = graph(ui, self.version, function, self.selected_address) {
+                if let Some(address) =
+                    graph(ui, self.version, function, self.state.selected_address)
+                {
                     target = Some(address);
-                    self.view = View::Disassembly;
+                    self.state.view = View::Disassembly;
                 }
             }
             View::Registers => {
@@ -418,7 +561,7 @@ impl App {
                         for block in &lifted.blocks {
                             ui.label(
                                 RichText::new(format!("Block 0x{:X}", block.address))
-                                    .color(ACCENT)
+                                    .color(palette.accent)
                                     .monospace(),
                             );
                             if !block.inputs.is_empty() {
@@ -448,10 +591,14 @@ impl App {
                                     statement.address, statement.text
                                 ))
                                 .monospace()
-                                .color(if statement.supported { TEXT } else { MUTED });
+                                .color(if statement.supported {
+                                    palette.text
+                                } else {
+                                    palette.muted
+                                });
                                 if ui
                                     .selectable_label(
-                                        self.selected_address == Some(statement.address),
+                                        self.state.selected_address == Some(statement.address),
                                         text,
                                     )
                                     .clicked()
@@ -481,7 +628,7 @@ impl App {
                             ui.monospace(code);
                         });
                 } else if let Some(reason) = &result.unavailable {
-                    ui.label(RichText::new(reason).color(WARN));
+                    ui.label(RichText::new(reason).color(palette.warn));
                 }
             }
             _ => {}
@@ -493,6 +640,7 @@ impl App {
     }
 
     pub(super) fn inspector(&mut self, ui: &mut Ui) {
+        let palette = self.theme.palette();
         let Some(session) = &mut self.session else {
             return;
         };
@@ -500,16 +648,18 @@ impl App {
         ui.add_space(6.0);
         let mut target = None;
         let mut offset = None;
+        let mut bookmark = None;
         ScrollArea::vertical()
             .id_salt(("inspector_rows", self.version))
             .show(ui, |ui| {
                 if let Some(function) = self
+                    .state
                     .selected_function
                     .and_then(|key| session.analysis.functions.get(&key))
                 {
                     ui.strong("Function name");
                     ui.add(
-                        egui::TextEdit::singleline(&mut self.name)
+                        egui::TextEdit::singleline(&mut self.state.name)
                             .hint_text(&function.name)
                             .desired_width(f32::INFINITY),
                     );
@@ -520,21 +670,26 @@ impl App {
                     {
                         match session
                             .project
-                            .set_function_name(function.address, self.name.clone())
+                            .set_function_name(function.address, self.state.name.clone())
                         {
                             Ok(()) => session.dirty = true,
                             Err(error) => self.message = Some((true, error.to_string())),
                         }
                     }
                 }
-                let Some(address) = self.selected_address else {
+                let Some(address) = self.state.selected_address else {
+                    if let Some(file_offset) = self.state.selected_file_offset {
+                        ui.separator();
+                        ui.monospace(format!("File offset 0x{file_offset:X}"));
+                        label(ui, "No mapped virtual address");
+                    }
                     return;
                 };
                 ui.separator();
                 ui.label(
                     RichText::new(format!("0x{address:X}"))
                         .monospace()
-                        .color(ACCENT),
+                        .color(palette.accent),
                 );
                 let image = session.project.image();
                 if let Some(file_offset) = image.file_offset(address)
@@ -545,7 +700,7 @@ impl App {
                 ui.add_space(6.0);
                 ui.strong("Address comment");
                 ui.add(
-                    egui::TextEdit::multiline(&mut self.note)
+                    egui::TextEdit::multiline(&mut self.state.note)
                         .hint_text("Add an analysis note…")
                         .desired_rows(3)
                         .desired_width(f32::INFINITY),
@@ -554,44 +709,68 @@ impl App {
                     .add_enabled(self.opening.is_none(), Button::new("Apply comment"))
                     .clicked()
                 {
-                    match session.project.set_comment(address, self.note.clone()) {
+                    match session
+                        .project
+                        .set_comment(address, self.state.note.clone())
+                    {
                         Ok(()) => session.dirty = true,
                         Err(error) => self.message = Some((true, error.to_string())),
                     }
                 }
+                ui.strong("Bookmark");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.state.bookmark)
+                        .hint_text("Bookmark name…")
+                        .desired_width(f32::INFINITY),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    let active = session.project.bookmark(address).is_some();
+                    if ui
+                        .add_enabled(
+                            !self.state.bookmark.trim().is_empty(),
+                            Button::new(if active { "Rename" } else { "Add bookmark" }),
+                        )
+                        .clicked()
+                    {
+                        bookmark = Some((address, self.state.bookmark.clone()));
+                    }
+                    if active && ui.small_button("Remove").clicked() {
+                        bookmark = Some((address, String::new()));
+                    }
+                });
                 ui.separator();
-                let references = || {
-                    session
-                        .analysis
-                        .functions
-                        .values()
-                        .flat_map(|function| &function.references)
-                };
-                for (title, incoming) in [
-                    ("Incoming references", true),
-                    ("Outgoing references", false),
+                for (title, incoming, rows) in [
+                    (
+                        "Incoming references",
+                        true,
+                        session.references.incoming(address),
+                    ),
+                    (
+                        "Outgoing references",
+                        false,
+                        session.references.outgoing(address),
+                    ),
                 ] {
-                    ui.strong(title);
-                    let mut rows = references()
-                        .filter(|reference| {
-                            if incoming {
-                                reference.target == address
-                            } else {
-                                reference.source == address
-                            }
-                        })
-                        .peekable();
-                    if rows.peek().is_none() {
+                    ui.strong(format!("{title} ({})", rows.len()));
+                    if rows.is_empty() {
                         label(ui, "None discovered");
                     }
-                    for reference in rows.take(80) {
-                        if let Some(address) = reference_row(ui, reference, incoming) {
-                            target = Some(address);
-                        }
-                    }
+                    ScrollArea::vertical()
+                        .max_height(ROW * 10.0)
+                        .id_salt(("xref", incoming, address))
+                        .show_rows(ui, ROW, rows.len(), |ui, range| {
+                            for reference in &rows[range] {
+                                if let Some(address) = reference_row(ui, reference, incoming) {
+                                    target = Some(address);
+                                }
+                            }
+                        });
                     ui.add_space(8.0);
                 }
             });
+        if let Some((address, name)) = bookmark {
+            self.bookmark(address, name);
+        }
         if let Some(address) = target {
             self.goto(address);
         }
@@ -601,6 +780,7 @@ impl App {
     }
 
     fn hex(&mut self, ui: &mut Ui) {
+        let palette = self.theme.palette();
         let Some(image) = self.session.as_ref().map(|session| session.project.image()) else {
             return;
         };
@@ -608,20 +788,18 @@ impl App {
         ui.label(
             RichText::new("File offset    00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F   ASCII")
                 .monospace()
-                .color(MUTED),
+                .color(palette.muted),
         );
         let mut area = ScrollArea::both()
             .auto_shrink([false; 2])
             .id_salt(("hex_rows", self.version));
-        if let Some(offset) = self.hex_jump.take() {
+        if let Some(offset) = self.state.hex_jump.take() {
             area = area.vertical_scroll_offset(
                 (ROW + ui.spacing().item_spacing.y) * (offset / 16).saturating_sub(3) as f32,
             );
         }
         let mut picked = None;
-        let selected = self
-            .selected_address
-            .and_then(|address| image.file_offset(address));
+        let selected = self.state.selected_file_offset;
         area.show_rows(ui, ROW, image.bytes().len().div_ceil(16), |ui, rows| {
             for row in rows {
                 let offset = row * 16;
@@ -652,7 +830,7 @@ impl App {
             }
         });
         if let Some(offset) = picked {
-            self.select(self.selected_function, image.virtual_address(offset));
+            self.select_file_offset(offset);
         }
     }
 
@@ -666,10 +844,10 @@ impl App {
         ui.horizontal(|ui| {
             if strings {
                 ui.label("Minimum length");
-                ui.add(egui::DragValue::new(&mut self.strings_min).range(1..=256));
+                ui.add(egui::DragValue::new(&mut self.state.strings_min).range(1..=256));
             } else {
                 let field = ui.add(
-                    egui::TextEdit::singleline(&mut self.query)
+                    egui::TextEdit::singleline(&mut self.state.query)
                         .font(egui::TextStyle::Monospace)
                         .hint_text("48 8B ?? ??")
                         .desired_width(180.0),
@@ -678,14 +856,14 @@ impl App {
             }
             if ui
                 .add_enabled(
-                    self.querying.is_none(),
+                    self.state.querying.is_none(),
                     Button::new(if strings { "Scan" } else { "Find" }),
                 )
                 .clicked()
             {
                 run = true;
             }
-            if self.querying.is_some() {
+            if self.state.querying.is_some() {
                 ui.spinner();
             }
         });
@@ -696,7 +874,7 @@ impl App {
             let image = session.project.image();
             let mut offset = None;
             if strings {
-                if let Some(items) = &self.strings {
+                if let Some(items) = &self.state.strings {
                     offset =
                         result_rows(ui, self.version, "strings", items.len(), image, |index| {
                             let item = &items[index];
@@ -710,7 +888,7 @@ impl App {
                             )
                         });
                 }
-            } else if let Some(hits) = &self.hits {
+            } else if let Some(hits) = &self.state.hits {
                 offset = result_rows(ui, self.version, "search", hits.len(), image, |index| {
                     (hits[index], String::new())
                 });
@@ -722,7 +900,135 @@ impl App {
     }
 }
 
+enum CallSelection {
+    Function(u64),
+    Site(u64, u64),
+}
+
+fn call_rows(
+    ui: &mut Ui,
+    version: u64,
+    session: &Session,
+    address: u64,
+    incoming: bool,
+) -> Option<CallSelection> {
+    let (kind, rows): (&str, &[CallSite]) = if incoming {
+        ("Callers", session.references.callers(address))
+    } else {
+        ("Callees", session.references.callees(address))
+    };
+    ui.strong(format!("{kind} ({})", rows.len()));
+    ui.separator();
+    if rows.is_empty() {
+        label(ui, "None discovered");
+    }
+    let mut picked = None;
+    ScrollArea::both()
+        .id_salt(("call-rows", version, address, incoming))
+        .show_rows(ui, ROW, rows.len(), |ui, range| {
+            for call in &rows[range] {
+                let peer = if incoming { call.caller } else { call.target };
+                ui.horizontal(|ui| {
+                    let name = session.analysis.functions.get(&peer).map_or_else(
+                        || format!("0x{peer:X}"),
+                        |function| session.function_name(function).to_owned(),
+                    );
+                    if ui
+                        .link(&name)
+                        .on_hover_text(format!("Open function 0x{peer:X}"))
+                        .clicked()
+                    {
+                        picked = Some(CallSelection::Function(peer));
+                    }
+                    if ui
+                        .small_button(format!("0x{:X}", call.site))
+                        .on_hover_text("Open call site")
+                        .clicked()
+                    {
+                        picked = Some(CallSelection::Site(call.caller, call.site));
+                    }
+                });
+            }
+        });
+    picked
+}
+
+fn entropy_chart(ui: &mut Ui, triage: &ImageTriage) -> Option<usize> {
+    let palette = theme::current(ui.ctx());
+    let size = vec2(ui.available_width().clamp(320.0, 980.0), 142.0);
+    let (response, painter) = ui.allocate_painter(size, Sense::click());
+    let chart = response.rect.shrink2(vec2(0.0, 6.0));
+    let graph = Rect::from_min_max(chart.min + vec2(31.0, 3.0), chart.max - vec2(8.0, 19.0));
+    painter.rect_filled(chart, 3, palette.panel);
+    for level in [0, 2, 4, 6, 8] {
+        let y = egui::lerp(graph.bottom()..=graph.top(), level as f32 / 8.0);
+        painter.line_segment(
+            [pos2(graph.left(), y), pos2(graph.right(), y)],
+            Stroke::new(0.7_f32, palette.border),
+        );
+        painter.text(
+            pos2(graph.left() - 7.0, y),
+            Align2::RIGHT_CENTER,
+            level,
+            FontId::monospace(11.0),
+            palette.muted,
+        );
+    }
+    for sample in &triage.samples {
+        let start = graph.left() + graph.width() * sample.offset as f32 / triage.size_bytes as f32;
+        let end = graph.left()
+            + graph.width() * (sample.offset + sample.byte_count) as f32 / triage.size_bytes as f32;
+        let top = egui::lerp(
+            graph.bottom()..=graph.top(),
+            (sample.entropy_bits_per_byte as f32 / 8.0).clamp(0.0, 1.0),
+        );
+        painter.rect_filled(
+            Rect::from_min_max(pos2(start, top), pos2(end, graph.bottom())),
+            0,
+            palette.accent,
+        );
+    }
+    painter.text(
+        pos2(graph.left(), graph.bottom() + 5.0),
+        Align2::LEFT_TOP,
+        "0x0",
+        FontId::monospace(11.0),
+        palette.muted,
+    );
+    painter.text(
+        pos2(graph.right(), graph.bottom() + 5.0),
+        Align2::RIGHT_TOP,
+        format!("0x{:X}", triage.size_bytes),
+        FontId::monospace(11.0),
+        palette.muted,
+    );
+    let hovered = response
+        .hover_pos()
+        .filter(|point| graph.contains(*point))?;
+    let byte = ((hovered.x - graph.left()) / graph.width() * triage.size_bytes as f32) as usize;
+    let byte = byte.min(triage.size_bytes.saturating_sub(1));
+    let index = triage
+        .samples
+        .partition_point(|sample| sample.offset <= byte)
+        .checked_sub(1)?;
+    let sample = &triage.samples[index];
+    let selected = response.clicked().then_some(byte);
+    painter.line_segment(
+        [
+            pos2(hovered.x, graph.top()),
+            pos2(hovered.x, graph.bottom()),
+        ],
+        Stroke::new(1.3_f32, palette.text),
+    );
+    response.on_hover_text(format!(
+        "0x{:X} · {:.3} bits/byte in this window\nClick to open in Hex",
+        byte, sample.entropy_bits_per_byte
+    ));
+    selected
+}
+
 fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) -> Option<u64> {
+    let palette = theme::current(ui.ctx());
     const LIMIT: usize = 200;
     let visible = &function.blocks[..function.blocks.len().min(LIMIT)];
     if function.blocks.len() > LIMIT {
@@ -767,9 +1073,9 @@ fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) 
                     };
                     let target = origin + target;
                     let color = match edge.kind {
-                        EdgeKind::Fallthrough => MUTED,
-                        EdgeKind::Taken => ACCENT,
-                        EdgeKind::Jump => WARN,
+                        EdgeKind::Fallthrough => palette.muted,
+                        EdgeKind::Taken => palette.accent,
+                        EdgeKind::Jump => palette.warn,
                     };
                     let stroke = Stroke::new(1.4_f32, color);
                     let from = base + vec2(block_size.x * 0.5, block_size.y);
@@ -806,8 +1112,15 @@ fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) 
                 painter.rect(
                     rect,
                     4,
-                    RAISED,
-                    Stroke::new(1.0_f32, if highlight { ACCENT } else { BORDER }),
+                    palette.raised,
+                    Stroke::new(
+                        1.0_f32,
+                        if highlight {
+                            palette.accent
+                        } else {
+                            palette.border
+                        },
+                    ),
                     StrokeKind::Inside,
                 );
                 let heading = format!(
@@ -819,7 +1132,7 @@ fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) 
                     Align2::LEFT_TOP,
                     heading,
                     FontId::monospace(13.0),
-                    ACCENT,
+                    palette.accent,
                 );
                 for (index, instruction) in function.instructions[block.first_instruction..]
                     .iter()
@@ -832,7 +1145,7 @@ fn graph(ui: &mut Ui, version: u64, function: &Function, selected: Option<u64>) 
                         Align2::LEFT_TOP,
                         text,
                         FontId::monospace(12.0),
-                        TEXT,
+                        palette.text,
                     );
                 }
             }

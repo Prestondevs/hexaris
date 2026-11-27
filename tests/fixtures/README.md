@@ -18,3 +18,11 @@ analyzeHeadless PATH_TO_PROJECT_PARENT HexarisFixture -import .dev\fixtures\scor
 The probe emits the decoded instructions, basic blocks and edges, references to `score`, and decompiled output for the source in this directory. Keep generated images and research outputs local.
 
 From a Visual Studio developer shell, `pwsh -File scripts/verify-windows-fixture.ps1` compiles this fixture, validates key CLI operations, recompiles Hexaris's C-like result, and compares it with the original function over boundary cases and a deterministic input sequence.
+
+`unwind.c` tests an uncalled function discoverable through the PE exception directory and a separate named executable export. Build and verify it with `pwsh -File scripts/verify-workstation.ps1`. Pass `-GhidraXml PATH` to check a real Ghidra metadata merge. The following headless command creates that export from the original score fixture.
+
+```bat
+analyzeHeadless PATH_TO_PROJECT_PARENT HexarisXmlFixture -import .dev\fixtures\score.exe -deleteProject -scriptPath tests\fixtures -postScript ExportFixtureXml.java 140001000 PATH_TO_OUTPUT_XML
+```
+
+Use a local scratch path for XML and its accompanying `.bytes` file. The import check reads only the XML.

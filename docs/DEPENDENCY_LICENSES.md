@@ -5,6 +5,7 @@ The project source uses MIT. Cargo.lock records the exact dependency graph. Rust
 | Component | Role | Upstream license |
 | --- | --- | --- |
 | `object` | Loader metadata | Apache-2.0 OR MIT |
+| `quick-xml` | Local Ghidra program XML parsing | MIT |
 | `iced-x86` | Instruction decoder | MIT |
 | `eframe` and `egui` | Native desktop workbench | MIT OR Apache-2.0 |
 | `rfd` | System file dialogs | MIT |

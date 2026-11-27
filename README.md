@@ -15,9 +15,13 @@ cargo run --locked -p hexaris-desktop -- path/to/program
 
 The desktop accepts a file path, drag and drop, or **Open**. Use **File → Open raw image** to choose an architecture and base address for unstructured x86 bytes. Select an instruction to see its file offset, address comment, and discovered references in the inspector. Apply comments and names before saving a project.
 
+Open more files to work across tabs. Each tab keeps its selection, history and search state. **Overview** shows file identity and click-to-hex entropy. **Calls** shows incoming and outgoing direct call sites. Press **Ctrl+D** to toggle a bookmark at the current address. Use **Themes** to switch palettes. Graphite is the default, with Slate, Ash Light, Foundry and High Contrast also available. The menu previews canvas, panel, accent and text colors. Hexaris remembers the chosen theme.
+
 ```sh
 cargo run --locked -p hexaris-cli -- inspect path/to/program
+cargo run --locked -p hexaris-cli -- triage path/to/first path/to/second
 cargo run --locked -p hexaris-cli -- analyze path/to/program
+cargo run --locked -p hexaris-cli -- references path/to/program 0x140001000
 cargo run --locked -p hexaris-cli -- disassemble path/to/program 0x140001000 --count 32
 cargo run --locked -p hexaris-cli -- decompile path/to/program 0x140001000
 cargo run --locked -p hexaris-cli -- find path/to/program "48 8B ?? ??"
@@ -27,6 +31,8 @@ cargo run --locked -p hexaris-cli -- project create path/to/program sample.hxpro
 Choose a virtual address appropriate to the input. Addresses accept decimal or `0x`-prefixed hexadecimal. Run `hexaris-cli --help` for the full command list. A project embeds the original bytes and local annotations and can be reopened without the source file. [Project format](docs/PROJECT_FORMAT.md)
 
 **File → Export byte patch** and the CLI `patch` command can write a separate binary copy with a fixed-length replacement verified against the expected original bytes. The offset is a file offset. Reopen the copy to analyze it.
+
+Hexaris can merge names, comments and bookmarks from a Ghidra program XML export. [Import instructions](docs/GHIDRA_XML.md) · [Commercial workflow coverage](docs/PRO_FEATURES.md)
 
 Windows x86-64 is the current validation platform. The source targets Linux and macOS through the same Rust desktop framework. The runtime performs local analysis and does not launch another analysis engine. [Development environment](docs/DEVELOPMENT_ENVIRONMENT.md)
 
