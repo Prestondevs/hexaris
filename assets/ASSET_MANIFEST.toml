@@ -1,24 +1,16 @@
 [[asset]]
-file = "branding/starry-night.png"
-source = "Original artwork for Hexaris"
-license = "MIT"
-usage = "Welcome screen"
-
-[[asset]]
 file = "branding/hexaris-icon.svg"
-source = "Original Hexaris mark inspired by ASCII terminal glyphs"
-license = "MIT"
-usage = "Desktop header, window icon, and embedded Windows application icon"
+source = "Braille artwork supplied by the project owner"
+license = "MIT (Hexaris vector adaptation)"
+modifications = "Rendered the supplied dot grid in white on black and framed a square crop around the eye."
+usage = "Welcome screen, desktop header, window icon, and embedded Windows application icon"
 
 [[asset]]
-file = "../docs/images/alchemist-banner.jpg"
-source = "https://id.rijksmuseum.nl/20026963"
-image_source = "https://iiif.micr.io/xHsCK/0,1229,4065,2136/1600,/0/default.jpg"
-credit = "Thomas Wijck, The Alchemist, c. 1660–1670. Rijksmuseum, SK-A-489. Dupper Wzn. Bequest, Dordrecht."
-license = "Public domain"
-rights_url = "https://creativecommons.org/publicdomain/mark/1.0/"
-modifications = "Detail matching the Rijksmuseum collection preview, served at 1600 pixels wide by the museum's image service."
-usage = "README banner only"
+file = "../docs/images/hexaris-eye-banner.svg"
+source = "Braille artwork supplied by the project owner"
+license = "MIT (Hexaris vector adaptation)"
+modifications = "Rendered the complete dot pattern in white on a wide black canvas."
+usage = "README banner"
 
 [[collection]]
 source = "Hexaris Windows desktop on the authored score and workbench fixtures"

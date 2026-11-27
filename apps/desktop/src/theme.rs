@@ -2,7 +2,6 @@ use eframe::egui::{
     self, Color32, ColorImage, Context, FontId, IconData, Stroke, TextureHandle, TextureOptions,
 };
 
-const ARTWORK: &[u8] = include_bytes!("../../../assets/branding/starry-night.png");
 const ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/hexaris-icon.png"));
 pub const STORAGE_KEY: &str = "hexaris.theme";
 
@@ -257,18 +256,10 @@ fn raster(svg: &[u8], size: u32) -> Option<Vec<u8>> {
     Some(pixmap.take())
 }
 
-pub fn artwork_texture(ctx: &Context) -> Option<TextureHandle> {
-    png_texture(ctx, "hexaris-artwork", ARTWORK)
-}
-
 pub fn brand_texture(ctx: &Context) -> Option<TextureHandle> {
-    png_texture(ctx, "hexaris-icon", ICON)
-}
-
-fn png_texture(ctx: &Context, name: &str, bytes: &[u8]) -> Option<TextureHandle> {
-    let icon = eframe::icon_data::from_png_bytes(bytes).ok()?;
+    let icon = eframe::icon_data::from_png_bytes(ICON).ok()?;
     Some(ctx.load_texture(
-        name,
+        "hexaris-icon",
         ColorImage::from_rgba_unmultiplied([icon.width as usize, icon.height as usize], &icon.rgba),
         TextureOptions::LINEAR,
     ))

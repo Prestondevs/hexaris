@@ -562,11 +562,13 @@
       ],
       "implementation_files": [
         "apps/desktop/src/app.rs",
-        "apps/desktop/src/app/views.rs"
+        "apps/desktop/src/app/views.rs",
+        "apps/desktop/src/theme.rs",
+        "apps/desktop/build.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [],
-      "test_results": null,
+      "test_results": "The Windows x64 release package launched the desktop on the score fixture. Windows Explorer extracted the embedded Braille eye icon.",
       "visual_validation_status": "VERIFIED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],

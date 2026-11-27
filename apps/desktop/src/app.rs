@@ -167,7 +167,6 @@ pub struct App {
     raw_base: String,
     raw_arch: Architecture,
     mark: Option<TextureHandle>,
-    artwork: Option<TextureHandle>,
     values: values::Converter,
     rename: Option<rename::RenameDialog>,
     open_icon: Option<TextureHandle>,
@@ -198,7 +197,6 @@ impl App {
             raw_base: "0x1000".into(),
             raw_arch: Architecture::X86_64,
             mark: theme::brand_texture(ctx),
-            artwork: theme::artwork_texture(ctx),
             values: values::Converter::default(),
             rename: None,
             open_icon: theme::tabler(
@@ -1067,8 +1065,8 @@ impl eframe::App for App {
                 .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space((ui.available_height() * 0.29).max(35.0));
-                        if let Some(artwork) = &self.artwork {
-                            ui.image((artwork.id(), egui::vec2(128.0, 128.0)));
+                        if let Some(mark) = &self.mark {
+                            ui.image((mark.id(), egui::vec2(128.0, 128.0)));
                         }
                         ui.add_space(12.0);
                         ui.label(RichText::new("Open a binary").size(32.0).strong());

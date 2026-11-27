@@ -1,7 +1,5 @@
 <p align="center">
-  <img src="docs/images/alchemist-banner.jpg" width="100%" alt="An alchemist writes at a desk surrounded by books, papers, and laboratory objects">
-  <br>
-  <sub>Thomas Wijck, <em>The Alchemist</em> (detail), c. 1660–1670. Dupper Wzn. Bequest, Dordrecht. Public domain. <a href="https://id.rijksmuseum.nl/20026963">Rijksmuseum, SK-A-489</a></sub>
+  <img src="docs/images/hexaris-eye-banner.svg" width="100%" alt="The Hexaris eye, drawn in white Braille dots on a black background">
 </p>
 
 <h1 align="center">Hexaris</h1>

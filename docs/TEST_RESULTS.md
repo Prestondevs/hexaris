@@ -18,4 +18,6 @@ The workbench update adds tests for forced branch outcomes, mapped ASCII and ASC
 
 Read-only static analysis of the local Bob’s Gambling PE discovered 71 functions, 252 basic blocks, and 134 direct branch references. Hexaris emitted address-linked Pseudo-C for all 71 discovered functions and structured output for four. The file contained printable strings and the analysis resolved zero direct text references. The sample hash stayed the same.
 
+For 0.2.2, the extracted Windows x64 package reported the new CLI version and opened the score fixture in the desktop app. Windows Explorer extracted the embedded white-on-black Braille eye icon. The ZIP includes the matching README banner and the dependency license notices.
+
 Linux and macOS native runtime, accessibility, formal differential corpus coverage, fuzzing, and benchmark gates remain open.
