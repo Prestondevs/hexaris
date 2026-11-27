@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/branding/starry-night.png" width="96" height="96" alt="Hexaris artwork showing a golden star reflected in a lake">
+  <img src="assets/branding/readme-banner.jpg" width="100%" alt="Panoramic oil painting of a golden star reflected in a lake beneath a midnight sky">
 </p>
 
 <h1 align="center">Hexaris</h1>

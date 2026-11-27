@@ -8,7 +8,13 @@ usage = "Original Hexaris mark"
 file = "branding/starry-night.png"
 source = "Original artwork for Hexaris"
 license = "MIT"
-usage = "Window icon, desktop header, welcome screen, and README"
+usage = "Window icon, desktop header, and welcome screen"
+
+[[asset]]
+file = "branding/readme-banner.jpg"
+source = "Panoramic adaptation of the Hexaris starlit lake artwork"
+license = "MIT"
+usage = "README banner"
 
 [[collection]]
 source = "https://github.com/tabler/tabler-icons"
