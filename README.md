@@ -21,9 +21,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/workbench.png" width="100%" alt="Hexaris in Graphite with multiple binaries open, showing x86-64 disassembly, function navigation, and an address inspector">
+  <a href="docs/images/split-program.png"><img src="docs/images/split-program.png" width="100%" alt="Hexaris showing the Program listing and Pseudo-C side by side with the Strings panel open"></a>
   <br>
-  <sub>The Graphite workbench on a sample executable, with its function list and address inspector open.</sub>
+  <sub>Program and Pseudo-C share the selected address. The Strings panel stays open alongside both.</sub>
 </p>
 
 ## Features
@@ -31,14 +31,26 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/control-flow.png"><img src="docs/images/control-flow.png" width="100%" alt="A control-flow graph showing the two branches of the score fixture and their common return block"></a>
+      <a href="docs/images/graph-file-strings.png"><img src="docs/images/graph-file-strings.png" width="100%" alt="A control-flow graph with the file's printable strings in the side panel"></a>
       <h3>Follow control flow</h3>
-      Fit the selected function’s full control-flow graph or focus on a block. Follow edges and string references, search in place, and carry highlights between code views.
+      Fit every decoded block or focus on one. Follow branches and browse referenced or file strings alongside the graph.
     </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/program-strings.png"><img src="docs/images/program-strings.png" width="100%" alt="The Program listing showing code from multiple functions and a marked undecoded executable range"></a>
+      <h3>Browse the program</h3>
+      Scroll through decoded code across executable regions, filter by region, and inspect undecoded ranges in Linear.
+    </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <a href="docs/images/pseudo-c.png"><img src="docs/images/pseudo-c.png" width="100%" alt="Hexaris displaying C-like pseudocode for an unsigned conditional and two arithmetic return paths"></a>
       <h3>Read lifted code</h3>
       Inspect 32-bit register SSA and incoming values at block boundaries. Pseudo-C shows structured expressions where supported and a register-level listing with branches, loops, and calls for other decoded functions.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/calls.png"><img src="docs/images/calls.png" width="100%" alt="The Calls view listing direct callers, callees, and selectable call-site addresses"></a>
+      <h3>Trace calls and references</h3>
+      Browse direct callers and callees, jump to a call site, and check the inspector for incoming and outgoing references to the selected address.
     </td>
   </tr>
   <tr>
@@ -48,9 +60,9 @@
       Find sections, symbols, imports and exports. Check the file’s SHA-256 or click the entropy chart to open the corresponding byte offset in Hex.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/calls.png"><img src="docs/images/calls.png" width="100%" alt="The Calls view listing direct callers, callees, and their selectable call-site addresses"></a>
-      <h3>Trace calls and references</h3>
-      Browse direct callers and callees, jump to a call site, and check the inspector for incoming and outgoing references to the selected address.
+      <a href="docs/images/patch-branch.png"><img src="docs/images/patch-branch.png" width="100%" alt="The Patch bytes window previewing the original and replacement bytes for a conditional branch"></a>
+      <h3>Preview and export patches</h3>
+      Invert a supported branch or queue a byte edit, review the replacement, and open the exported copy for reanalysis.
     </td>
   </tr>
 </table>
@@ -85,7 +97,7 @@ You can also open PowerShell in the extracted folder and launch the app there. P
 Use **File → Open raw image** for unstructured bytes. Press **Ctrl+D** to toggle a bookmark and **Ctrl+S** to save the current project. The release also provides a `.sha256` file for checking the ZIP download.
 
 <p align="center">
-  <img src="docs/images/welcome.png" width="720" alt="Hexaris welcome screen with a painting of a golden star reflected in a lake above the file picker">
+  <img src="docs/images/welcome.png" width="720" alt="Hexaris Open a binary screen with the Braille eye above the file picker">
 </p>
 
 Windows x64 is the validated release platform. The source also targets Linux and macOS. See the [feature matrix](docs/FEATURE_MATRIX.md) for tested coverage, including the current limits of decompilation and architecture support.

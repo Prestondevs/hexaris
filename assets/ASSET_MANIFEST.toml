@@ -15,7 +15,13 @@ usage = "README banner"
 [[collection]]
 source = "Hexaris Windows desktop on the authored score and workbench fixtures"
 license = "MIT"
-files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png", "../docs/images/graph-file-strings.png", "../docs/images/program-strings.png", "../docs/images/split-program.png"]
+files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png", "../docs/images/graph-file-strings.png", "../docs/images/program-strings.png", "../docs/images/split-program.png", "../docs/images/calls.png"]
+usage = "README and user guide screenshots"
+
+[[collection]]
+source = "Hexaris Windows welcome screen and Overview of the Hexaris CLI executable"
+license = "MIT"
+files = ["../docs/images/welcome.png", "../docs/images/triage.png"]
 usage = "README and user guide screenshots"
 
 [[collection]]
