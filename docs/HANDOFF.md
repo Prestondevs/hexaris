@@ -12,4 +12,8 @@ Disassembly and Linear use formatter tokens and theme colors. The control-flow c
 
 The desktop keeps the selected code representation during function navigation and shares address highlights between the graph, disassembly, and address-linked Pseudo-C. It has in-view text search, operand base controls, a value converter, argument names in version 3 projects, and branch patch menus. Static testing of a local training executable is tracked in the test report without publishing the input or its analysis export. [User guide](USER_GUIDE.md)
 
-The README banner and app icon render the same supplied Braille dot artwork on transparent canvases. The app uses the square SVG for the welcome screen and desktop header, and the Windows MSVC build embeds multiple sizes in the executable. [Asset manifest](../assets/ASSET_MANIFEST.toml)
+The README banner and app icon render the same supplied Braille dot artwork on transparent canvases. On Windows the eye appears on the welcome screen and taskbar. The Windows MSVC build embeds multiple sizes in the executable. [Asset manifest](../assets/ASSET_MANIFEST.toml)
+
+The shared Strings panel works alongside every workspace view. It shows direct references for the current function and automatically opens the file scan when none are available. Program lists decoded instructions across the executable image and marks undecoded file-backed ranges that can be inspected in Linear. [User guide](USER_GUIDE.md)
+
+Split view adds a second view picker and a resizable divider. Both panes share the selected function and address. Each pane keeps its own scroll position and local view settings. [User guide](USER_GUIDE.md#explore-an-image)

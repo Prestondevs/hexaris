@@ -262,18 +262,13 @@ impl App {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().button_padding.x = 7.0;
             for view in View::ALL {
-                if ui.selectable_value(&mut self.state.view, view, view.label()).clicked()
+                if ui
+                    .selectable_value(&mut self.state.view, view, view.label())
+                    .clicked()
                     && view.is_code()
                 {
                     self.state.preferred_code_view = view;
                 }
-            }
-            let mut keep_view = !self.state.reset_code_view;
-            if ui.toggle_value(&mut keep_view, "Keep code view")
-                .on_hover_text("Reuse the last code view when opening a function or following a code address in this tab.")
-                .changed()
-            {
-                self.state.reset_code_view = !keep_view;
             }
         });
         if self.state.view == View::Linear
@@ -282,12 +277,29 @@ impl App {
         {
             self.decode_linear(address);
         }
-        self.find_text(ui);
+        if self.state.view == View::Program && previous != View::Program {
+            self.state.program_jump = self.state.selected_address;
+        }
         ui.horizontal_wrapped(|ui| {
+            self.state.find.toggle(ui);
+            let mut keep_view = !self.state.reset_code_view;
+            if ui.toggle_value(&mut keep_view, "Keep code view")
+                .on_hover_text("Reuse the last code view when opening a function or following a code address in this tab.")
+                .changed()
+            {
+                self.state.reset_code_view = !keep_view;
+            }
             label(ui, "Operands");
             values::base_picker(ui, "operand-base", &mut self.state.number_base);
             if ui.small_button("Convert…").clicked() {
                 self.values.open = true;
+            }
+            if self.state.string_drawer.toggle(ui, self.state.view) {
+                self.state.flow.refit = true;
+                self.state.split.refit();
+            }
+            if self.state.split.controls(ui, self.state.view) {
+                self.state.flow.refit = true;
             }
             if let Some((first, last)) = self.state.selection.range {
                 ui.monospace(format!("0x{first:X}–0x{last:X}"));
@@ -296,6 +308,7 @@ impl App {
                 }
             }
         });
+        self.find_text(ui);
         self.selected_links(ui);
         ui.separator();
         if let Some(session) = &self.session {
@@ -306,6 +319,11 @@ impl App {
                 ui.label(RichText::new(warning).color(palette.warn));
             }
         }
+        self.strings_drawer(ui);
+        self.render_workspace_panes(ui);
+    }
+
+    pub(super) fn content_view(&mut self, ui: &mut Ui) {
         match self.state.view {
             View::Overview => self.overview(ui),
             View::Calls => self.calls(ui),
@@ -313,6 +331,7 @@ impl App {
                 self.function_view(ui)
             }
             View::Linear => self.linear_view(ui),
+            View::Program => self.program_view(ui),
             View::Hex => self.hex(ui),
             View::Strings => self.results(ui, true),
             View::Search => self.results(ui, false),
@@ -655,7 +674,10 @@ impl App {
                     &session.project,
                     self.state.selected_address,
                     &self.state.selection,
-                    self.state.number_base,
+                    flow::GraphDisplay {
+                        number_base: self.state.number_base,
+                        strings: &self.state.string_drawer.references,
+                    },
                 ) {
                     Some(flow::GraphAction::Select(address)) => target = Some(address),
                     Some(flow::GraphAction::Disassemble(address)) => {
@@ -1485,7 +1507,7 @@ fn result_rows(
     selected
 }
 
-fn instruction_text(
+pub(super) fn instruction_text(
     instruction: &Instruction,
     comment: &str,
     palette: theme::Palette,
@@ -1520,7 +1542,7 @@ fn instruction_text(
     job
 }
 
-fn patch_options(
+pub(super) fn patch_options(
     ui: &mut Ui,
     instruction: &Instruction,
     offset: &mut Option<usize>,

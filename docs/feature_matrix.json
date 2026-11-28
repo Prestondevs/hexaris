@@ -214,7 +214,7 @@
       "category": "analysis views",
       "reference_version": null,
       "reference_edition": null,
-      "feature_name": "Linear decode",
+      "feature_name": "Program listing and linear decode",
       "reference_behavior": "Present instructions, data and gaps in address order.",
       "evidence_source": [
         "docs/REFERENCE_INVENTORY.md"
@@ -224,18 +224,20 @@
       "implementation_files": [
         "crates/engine/src/analysis.rs",
         "apps/desktop/src/app/views.rs",
+        "apps/desktop/src/app/program.rs",
         "apps/desktop/src/theme.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
         "crates/engine/tests/workflows.rs",
+        "apps/desktop/src/app/program.rs",
         "apps/desktop/src/theme.rs"
       ],
-      "test_results": "Verified formatter tokens preserve the instruction text and identify direct branch targets. Register and number colors pass contrast checks in all themes.",
+      "test_results": "Verified address-ordered program rows from multiple functions and selection inside a mapped undecoded range. Formatter tokens preserve instruction text and identify direct branch targets.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [
-        "Hexaris provides a bounded sequential instruction listing. Disassembly and Linear highlight instruction tokens."
+        "The Program listing combines discovered code and undecoded spans across executable regions. Linear decodes a bounded sequence from a chosen address."
       ],
       "unresolved_limitations": [
         "Mixed data, code and typed spans remain open."
@@ -469,13 +471,15 @@
       "implementation_files": [
         "crates/engine/src/search.rs",
         "apps/desktop/src/app/find.rs",
+        "apps/desktop/src/app/strings.rs",
         "apps/desktop/src/app/views.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
       "test_files": [
-        "crates/engine/tests/workflows.rs"
+        "crates/engine/tests/workflows.rs",
+        "apps/desktop/src/app/strings.rs"
       ],
-      "test_results": "Authored fixture checks resolve ASCII and ASCII-range UTF-16LE references. A Windows desktop smoke test verifies the same referenced string in graph and Pseudo-C searches.",
+      "test_results": "Authored fixture checks resolve ASCII and ASCII-range UTF-16LE references. A drawer test verifies the automatic file scan and visible file strings for a function without references. Windows captures show the drawer beside the graph, Program, and split panes.",
       "visual_validation_status": "UNINVESTIGATED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],
@@ -563,12 +567,14 @@
       "implementation_files": [
         "apps/desktop/src/app.rs",
         "apps/desktop/src/app/views.rs",
+        "apps/desktop/src/app/split.rs",
+        "apps/desktop/src/app/window.rs",
         "apps/desktop/src/theme.rs",
         "apps/desktop/build.rs"
       ],
       "implementation_status": "PARTIALLY_IMPLEMENTED",
-      "test_files": [],
-      "test_results": "The Windows x64 release package launched the desktop on the score fixture. Windows Explorer extracted the embedded Braille eye icon.",
+      "test_files": ["apps/desktop/src/app/split.rs"],
+      "test_results": "Verified that each pane retains independent view settings and scroll requests while sharing the selected address. The Windows split capture shows Program and Pseudo-C together. A native check verified the taskbar icon and absence of a native caption.",
       "visual_validation_status": "VERIFIED",
       "functional_validation_status": "VERIFIED",
       "known_differences": [],

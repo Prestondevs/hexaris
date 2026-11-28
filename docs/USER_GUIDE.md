@@ -52,6 +52,9 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 | Read bytes | Open **Hex** for the file offset, bytes, and ASCII representation of each row. Click an exact byte or jump to a file offset using the offset field, the entropy chart, or a search result. |
 | Find byte patterns | Open **Byte search** or **Find bytes**. Enter a pattern such as `83 F8 ??`, where `??` matches one byte. Pick a result to open its offset. |
 | Find text from any view | Press **Ctrl+F**. **Current view** searches the displayed representation and its referenced strings. **Binary strings** searches printable ASCII across the file. Click a code result to jump to it, or a byte result to open Hex. **Ctrl+Shift+F** opens byte search. |
+| Browse strings alongside code | Toggle **Strings panel** beside **Operands** in any view. **Referenced** shows confirmed references from the selected function. **File strings** lists printable ASCII from the binary and opens automatically when the function has no direct string references. Click a string to open its bytes in Hex or right-click to copy the text. |
+| Scroll through the program | Open **Program** for one address-ordered listing across executable regions. Choose a region, toggle function labels and undecoded ranges, or use **Start**, **End**, and **Go** to navigate. Click an undecoded range to inspect it in **Linear**. |
+| Use two views at once | Toggle **Split view** beside **Strings panel**. Choose the second view from its picker and drag the divider to resize the panes. **Split layout** lets you place them side by side or stack them. Scroll each pane independently and select an instruction to show its address in both. |
 | Convert numbers or decode hex | Change **Operands** to Hex, Decimal, Octal, or Binary in the workspace. Use **Convert…** to translate a 64-bit integer between bases or decode hex pairs such as `48 69` as UTF-8 text. |
 | Change the appearance | Open **Themes** and choose Graphite, Slate, Ash Light, Foundry, or High Contrast. The menu previews each palette and Hexaris remembers the choice. |
 
@@ -60,14 +63,20 @@ The fixture doubles an unsigned input below 10 and adds 3 otherwise. The command
 ## Follow code and references
 
 1. Select an entry in **Functions** or type a virtual address and click **Go**. Addresses accept decimal or a `0x` hexadecimal prefix. **Analyze here** explicitly decodes a function at a mapped code address. **Keep code view** is enabled by default. Click **Pseudo-C**, then choose another function to keep seeing Pseudo-C in this tab.
-2. Use **Disassembly** for the selected function or **Linear** to decode successive instructions from an address. Mnemonics, branches and targets, registers, constants, and address comments use theme colors. Right-click a disassembly instruction to copy its address or text. **Back** and **Forward** revisit navigation history.
-3. Open **Control flow** and click **Fit all blocks** to see every decoded block in the selected function. Drag to pan, scroll to zoom, and double-click a block to focus. **Block details** shows the block's instruction list, string references, and successor buttons. Click a branch arrow to select the branch instruction. Right-click the arrow for follow and patch options.
+2. Use **Program** to browse the whole executable listing, **Disassembly** for the selected function, or **Linear** to decode successive instructions from an address. Mnemonics, branches and targets, registers, constants, and address comments use theme colors. Right-click a decoded instruction to follow an address, copy text, or open a patch preview. **Back** and **Forward** revisit navigation history.
+3. Open **Control flow** and click **Fit all blocks** to see every decoded block in the selected function. Drag to pan, scroll to zoom, and double-click a block to focus. **Block details** shows the block's instruction list, string references, and successor buttons. The **Strings panel** can also show the file's strings while you read the graph. Click a branch arrow to select the branch instruction. Right-click the arrow for follow and patch options.
 4. Select an instruction and click a link under **Follow address**. Code targets open in the tab's preferred code view and mapped data opens in Hex. **Calls** lists direct callers and callees. The **Inspector** also shows incoming and outgoing references.
 5. Use **Register IR** to inspect projected 32-bit register values and incoming values at block boundaries. **Pseudo-C** opens a structured view for supported x86-64 leaf functions. Switch to **Control-flow** to read the register-level listing with block labels, branches, and calls. Hexaris opens that listing automatically when it cannot produce structured output. Click a line to select its address in the Inspector.
 
 Drag across instruction rows in **Disassembly** or address-linked **Pseudo-C** to highlight a range. In **Control flow**, use **Shift+drag** to select blocks. Switch views to follow the same address range. **Pseudo-C** uses the address-linked representation while a range is active. **Clear highlight** restores the regular display.
 
 ![Control-flow blocks for the score fixture](images/control-flow.png)
+
+![File strings alongside the Control flow graph](images/graph-file-strings.png)
+
+![The Program listing with an undecoded executable range and file strings](images/program-strings.png)
+
+![Program and Pseudo-C panes showing the same selected address](images/split-program.png)
 
 ![In-view search and clickable string references in the control-flow graph](images/graph-strings.png)
 

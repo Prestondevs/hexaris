@@ -9,6 +9,7 @@ fn main() -> eframe::Result {
             .with_app_id("Hexaris")
             .with_inner_size([1240.0, 790.0])
             .with_min_inner_size([880.0, 560.0])
+            .with_decorations(!cfg!(target_os = "windows"))
             .with_icon(theme::window_icon()),
         ..Default::default()
     };

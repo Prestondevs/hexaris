@@ -47,6 +47,16 @@ impl FindState {
         self.focus = true;
     }
 
+    pub(super) fn toggle(&mut self, ui: &mut Ui) {
+        if ui.small_button("Find text  Ctrl+F").clicked() {
+            if self.open {
+                self.open = false;
+            } else {
+                self.open();
+            }
+        }
+    }
+
     pub(super) fn matches(&self, text: &str) -> bool {
         self.open
             && self.scope == Scope::View
@@ -58,13 +68,6 @@ impl FindState {
 impl App {
     pub(super) fn find_text(&mut self, ui: &mut Ui) {
         let find = &mut self.state.find;
-        if ui.small_button("Find text  Ctrl+F").clicked() {
-            if find.open {
-                find.open = false;
-            } else {
-                find.open();
-            }
-        }
         let Some(session) = &self.session else { return };
         if let Some(worker) = &find.worker {
             match worker.try_recv() {
@@ -85,7 +88,17 @@ impl App {
         let function = self.state.selected_function;
         let pseudo_control_flow =
             self.state.pseudo_control_flow || self.state.selection.range.is_some();
-        let origin = (view, function, pseudo_control_flow, self.state.number_base);
+        let scoped_function = if view == View::Program {
+            None
+        } else {
+            function
+        };
+        let origin = (
+            view,
+            scoped_function,
+            pseudo_control_flow,
+            self.state.number_base,
+        );
         if find.scope == Scope::View && find.origin != Some(origin) {
             find.hits.clear();
             find.submitted.clear();
@@ -201,6 +214,8 @@ impl App {
                     self.navigate(function, address);
                     if view == View::Flow {
                         self.state.flow.focus_selection = true;
+                    } else if view == View::Program {
+                        self.state.program_jump = Some(address);
                     }
                 }
             }
@@ -222,6 +237,28 @@ fn search_view(
     linear: Option<&LinearListing>,
     pattern: &str,
 ) -> Vec<Hit> {
+    if view == View::Program {
+        return session
+            .program
+            .instructions
+            .iter()
+            .filter_map(|row| {
+                let (function, instruction) = row.resolve(&session.analysis);
+                let name = session.function_name(function);
+                let comment = session.project.comment(row.address).unwrap_or_default();
+                let text = format!(
+                    "0x{:X}   {}   {name}   {comment}",
+                    row.address,
+                    format_instruction(instruction, base)
+                );
+                text.to_lowercase().contains(pattern).then_some(Hit {
+                    text,
+                    destination: Some(Destination::Code(row.address)),
+                })
+            })
+            .take(MAX_HITS + 1)
+            .collect();
+    }
     let mut hits = Vec::new();
     let mut add = |text: &str, destination| {
         if hits.len() <= MAX_HITS && text.to_lowercase().contains(pattern) {

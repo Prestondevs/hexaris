@@ -2,11 +2,10 @@ use std::collections::{BTreeMap, VecDeque};
 
 use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, StrokeKind, Vec2, pos2, vec2};
 use hexaris_engine::{
-    Block, BytePatch, Edge, EdgeKind, Function, Instruction, NumberBase, Project, ReferenceKind,
-    string_at,
+    Block, BytePatch, Edge, EdgeKind, Function, Instruction, NumberBase, Project,
 };
 
-use super::{Ui, label, selection::AddressSelection, theme};
+use super::{Ui, label, selection::AddressSelection, strings::References, theme};
 
 const CARD: Vec2 = vec2(340.0, 150.0);
 const STRIDE: Vec2 = vec2(392.0, 214.0);
@@ -20,13 +19,18 @@ pub(super) struct GraphState {
     layout: Layout,
     zoom: f32,
     pan: Vec2,
-    strings: BTreeMap<u64, Vec<(u64, String)>>,
     show_details: bool,
     edge: Option<(usize, Edge)>,
     menu_block: Option<usize>,
     menu_address: Option<u64>,
     pub(super) focus_selection: bool,
     box_anchor: Option<Pos2>,
+    pub(super) refit: bool,
+}
+
+pub(super) struct GraphDisplay<'a> {
+    pub number_base: NumberBase,
+    pub strings: &'a References,
 }
 
 #[derive(Default)]
@@ -116,7 +120,7 @@ pub(super) fn graph(
     project: &Project,
     selected: Option<u64>,
     selection: &AddressSelection,
-    number_base: NumberBase,
+    display: GraphDisplay<'_>,
 ) -> Option<GraphAction> {
     if function.blocks.is_empty() {
         label(ui, "No decoded blocks for this function.");
@@ -129,18 +133,6 @@ pub(super) fn graph(
         state.edge = None;
         state.menu_block = None;
         state.menu_address = None;
-        state.strings.clear();
-        for reference in &function.references {
-            if reference.kind == ReferenceKind::Address
-                && let Some(text) = string_at(project.image(), reference.target)
-            {
-                state
-                    .strings
-                    .entry(reference.source)
-                    .or_default()
-                    .push((reference.target, text));
-            }
-        }
     }
     let palette = theme::current(ui.ctx());
     let selected_index = selected
@@ -155,7 +147,7 @@ pub(super) fn graph(
             })
         })
         .or_else(|| state.layout.index.get(&function.address).copied());
-    let mut fit = changed;
+    let mut fit = changed | std::mem::take(&mut state.refit);
     let mut focus = std::mem::take(&mut state.focus_selection)
         .then_some(selected_index)
         .flatten();
@@ -214,7 +206,15 @@ pub(super) fn graph(
         && let Some(index) = selected_index
     {
         let block = &function.blocks[index];
-        let detail_action = details(ui, state, block, function, project, selected);
+        let detail_action = details(
+            ui,
+            state,
+            block,
+            function,
+            project,
+            selected,
+            display.strings,
+        );
         result = detail_action.or(result);
     }
     let size = ui.available_size().max(vec2(120.0, 120.0));
@@ -530,7 +530,7 @@ pub(super) fn graph(
                 let at = rect.min + vec2(10.0, LINE_Y + row as f32 * LINE_HEIGHT) * zoom;
                 if let Some(instruction) = preview_row(instructions, row) {
                     let mut job = egui::text::LayoutJob::default();
-                    instruction.visit_tokens_in(number_base, |text, kind| {
+                    instruction.visit_tokens_in(display.number_base, |text, kind| {
                         job.append(
                             text,
                             0.0,
@@ -557,7 +557,7 @@ pub(super) fn graph(
                 }
             }
             if let Some((_, text)) = instructions.iter().find_map(|item| {
-                state
+                display
                     .strings
                     .get(&item.address)
                     .and_then(|strings| strings.first())
@@ -662,6 +662,7 @@ fn details(
     function: &Function,
     project: &Project,
     selected: Option<u64>,
+    strings: &References,
 ) -> Option<GraphAction> {
     let mut action = None;
     ui.horizontal_wrapped(|ui| {
@@ -704,7 +705,7 @@ fn details(
                             ui.close();
                         }
                     });
-                    if let Some(strings) = state.strings.get(&instruction.address) {
+                    if let Some(strings) = strings.get(&instruction.address) {
                         for (address, text) in strings {
                             if ui
                                 .link(format!("{text:?}"))

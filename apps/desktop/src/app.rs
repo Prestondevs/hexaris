@@ -18,17 +18,23 @@ use crate::theme::{self, Theme};
 mod editing;
 mod find;
 mod flow;
+mod program;
 mod rename;
 mod selection;
+mod split;
+mod strings;
 mod tools;
 mod values;
 mod views;
+#[cfg(target_os = "windows")]
+mod window;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum View {
     Overview,
     #[default]
     Disassembly,
+    Program,
     Linear,
     Flow,
     Calls,
@@ -40,9 +46,10 @@ enum View {
 }
 
 impl View {
-    const ALL: [Self; 10] = [
+    const ALL: [Self; 11] = [
         Self::Overview,
         Self::Disassembly,
+        Self::Program,
         Self::Linear,
         Self::Flow,
         Self::Calls,
@@ -57,6 +64,7 @@ impl View {
         match self {
             Self::Overview => "Overview",
             Self::Disassembly => "Disassembly",
+            Self::Program => "Program",
             Self::Linear => "Linear",
             Self::Flow => "Control flow",
             Self::Calls => "Calls",
@@ -72,6 +80,7 @@ impl View {
         matches!(
             self,
             Self::Disassembly
+                | Self::Program
                 | Self::Linear
                 | Self::Flow
                 | Self::Calls
@@ -87,6 +96,7 @@ struct Session {
     project: Project,
     analysis: Analysis,
     references: ReferenceIndex,
+    program: program::Index,
     triage: ImageTriage,
     path: Option<PathBuf>,
     dirty: bool,
@@ -143,6 +153,12 @@ struct ViewState {
     pseudo_jump: Option<usize>,
     number_base: hexaris_engine::NumberBase,
     selection: selection::AddressSelection,
+    string_drawer: strings::Drawer,
+    program_jump: Option<u64>,
+    program_region: Option<(u64, u64)>,
+    hide_program_names: bool,
+    hide_program_gaps: bool,
+    split: split::Split,
 }
 
 struct BackgroundTab {
@@ -548,6 +564,8 @@ impl App {
         };
         if self.state.view == View::Linear {
             self.decode_linear(address);
+        } else if self.state.view == View::Program {
+            self.state.program_jump = Some(address);
         }
     }
 
@@ -605,6 +623,10 @@ impl App {
         if let Some(function) = owner {
             self.navigate(function, address);
             self.follow_code_view(address);
+        } else if self.state.view == View::Program && session.program.contains_gap(address) {
+            self.select(self.state.selected_function, Some(address));
+            self.state.hide_program_gaps = false;
+            self.state.program_jump = Some(address);
         } else if let Some(offset) = session.project.image().file_offset(address) {
             self.show_hex(offset);
         } else {
@@ -635,7 +657,9 @@ impl App {
             Ok(function) => {
                 session.analysis.functions.insert(address, function);
                 session.references = ReferenceIndex::build(&session.analysis);
+                session.program = program::index(&session.analysis, session.project.image());
                 self.state.flow = flow::GraphState::default();
+                self.state.string_drawer.invalidate();
                 session.lifted.remove(&address);
                 session.pseudocode.remove(&address);
                 self.navigate(address, address);
@@ -683,7 +707,7 @@ impl App {
                 Some(pattern) => QueryResult::Bytes(pattern.find(&bytes).take(1001).collect()),
                 None => QueryResult::Strings(
                     hexaris_engine::scan_strings(&bytes, minimum)
-                        .take(1001)
+                        .take(strings::FILE_STRING_LIMIT + 1)
                         .collect(),
                 ),
             };
@@ -699,9 +723,9 @@ impl App {
             .frame(theme::frame(palette.panel, 13, 9))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(mark) = &self.mark {
-                        ui.image((mark.id(), egui::vec2(29.0, 29.0)));
-                    }
+                    #[cfg(target_os = "windows")]
+                    window::title(ui);
+                    #[cfg(not(target_os = "windows"))]
                     ui.label(RichText::new("Hexaris").size(21.0).strong());
                     ui.add_space(13.0);
                     if ui
@@ -768,6 +792,8 @@ impl App {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        #[cfg(target_os = "windows")]
+                        window::controls(ui);
                         ui.menu_button("Themes", |ui| {
                             ui.set_min_width(220.0);
                             for candidate in Theme::ALL {
@@ -807,6 +833,8 @@ impl App {
                             self.state.view = View::Search;
                         }
                         self.tools_menu(ui);
+                        #[cfg(target_os = "windows")]
+                        window::drag_space(ui);
                     });
                 });
             });
@@ -976,6 +1004,8 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        #[cfg(target_os = "windows")]
+        window::resize_edges(ctx);
         self.poll_workers(ctx);
         if ctx.input(|input| input.viewport().close_requested()) && !self.confirm_exit() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -1140,6 +1170,7 @@ fn load(path: PathBuf, mode: LoadMode) -> hexaris_engine::Result<Session> {
     };
     let analysis = analyze(project.image());
     let references = ReferenceIndex::build(&analysis);
+    let program = program::index(&analysis, project.image());
     let triage = triage(project.image());
     Ok(Session {
         source: path.clone(),
@@ -1147,6 +1178,7 @@ fn load(path: PathBuf, mode: LoadMode) -> hexaris_engine::Result<Session> {
         project,
         analysis,
         references,
+        program,
         triage,
         path: is_project.then_some(path),
         dirty: false,

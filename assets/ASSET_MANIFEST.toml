@@ -3,7 +3,7 @@ file = "branding/hexaris-icon.svg"
 source = "Braille artwork supplied by the project owner"
 license = "MIT (Hexaris vector adaptation)"
 modifications = "Rendered the supplied dot grid in grayscale with a transparent square canvas and a dark outline."
-usage = "Welcome screen, desktop header, window icon, and embedded Windows application icon"
+usage = "Welcome screen, taskbar, and embedded Windows application icon"
 
 [[asset]]
 file = "../docs/images/hexaris-eye-banner.svg"
@@ -15,7 +15,7 @@ usage = "README banner"
 [[collection]]
 source = "Hexaris Windows desktop on the authored score and workbench fixtures"
 license = "MIT"
-files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png"]
+files = ["../docs/images/workbench.png", "../docs/images/control-flow.png", "../docs/images/patch-branch.png", "../docs/images/pseudo-c.png", "../docs/images/pseudo-c-control-flow.png", "../docs/images/graph-file-strings.png", "../docs/images/program-strings.png", "../docs/images/split-program.png"]
 usage = "README and user guide screenshots"
 
 [[collection]]

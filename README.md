@@ -62,7 +62,7 @@ The [user guide](docs/USER_GUIDE.md) walks through the desktop views, CLI comman
 | Workflow | What Hexaris provides |
 | --- | --- |
 | Load an image | Inspect PE, ELF, thin Mach-O, and COFF metadata. Set an architecture and base address when opening raw x86 bytes. |
-| Search and navigate | Search the current code view, printable strings, or wildcard byte patterns. Each tab keeps its own preferred view, selection, and history. |
+| Search and navigate | Browse the Program listing across executable regions, open a split workspace, or search text and wildcard byte patterns. The Strings panel works alongside every view. |
 | Save an investigation | Add comments, rename functions, and save bookmarks. A `.hxproj` embeds the binary and its annotations. [Project format](docs/PROJECT_FORMAT.md) |
 | Move annotations between tools | Merge function names, comments, and bookmarks from Ghidra program XML. Existing Hexaris annotations keep their values. [Import guide](docs/GHIDRA_XML.md) |
 | Export a patch | Right-click a supported branch to invert it, always take it, or always fall through. Queue fixed-length byte edits and open the exported copy for reanalysis. |
